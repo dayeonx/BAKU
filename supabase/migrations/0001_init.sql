@@ -13,12 +13,15 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "본인 프로필 조회" on public.profiles;
 create policy "본인 프로필 조회" on public.profiles
   for select using (auth.uid() = id);
 
+drop policy if exists "본인 프로필 생성" on public.profiles;
 create policy "본인 프로필 생성" on public.profiles
   for insert with check (auth.uid() = id);
 
+drop policy if exists "본인 프로필 수정" on public.profiles;
 create policy "본인 프로필 수정" on public.profiles
   for update using (auth.uid() = id);
 
