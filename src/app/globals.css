@@ -1,26 +1,47 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fff8f0;
+  --foreground: #3b2417;
+
+  /* BAKU brand palette: warm brown + orange, bright and friendly */
+  --color-brand-50: #fdf3ec;
+  --color-brand-100: #f7e1cd;
+  --color-brand-300: #d9a06a;
+  --color-brand-500: #a8632f;
+  --color-brand-700: #6b3f1d;
+  --color-brand-900: #3f2410;
+
+  --color-accent-100: #ffe4c4;
+  --color-accent-300: #f5a259;
+  --color-accent-500: #e0791f;
+  --color-accent-700: #b25c12;
+
+  --color-cream: #fff8f0;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --font-sans: var(--font-noto-kr);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-brand-50: var(--color-brand-50);
+  --color-brand-100: var(--color-brand-100);
+  --color-brand-300: var(--color-brand-300);
+  --color-brand-500: var(--color-brand-500);
+  --color-brand-700: var(--color-brand-700);
+  --color-brand-900: var(--color-brand-900);
+
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-300: var(--color-accent-300);
+  --color-accent-500: var(--color-accent-500);
+  --color-accent-700: var(--color-accent-700);
+
+  --color-cream: var(--color-cream);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-noto-kr), Arial, Helvetica, sans-serif;
 }
