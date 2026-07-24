@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+
+const STUDENT_EMAIL_DOMAIN = "@baku.internal";
 
 const DEPARTMENTS = [
   { value: "member", label: "일반 회원" },
@@ -76,14 +80,32 @@ const inputClass =
   "w-full rounded-lg border border-brand-100 bg-white px-3.5 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-brand-300 focus:border-accent-500";
 
 function LoginForm() {
+  const router = useRouter();
   const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    // TODO: Supabase 연동 후 실제 로그인 처리로 교체
-    setNotice("백엔드(Supabase) 연결 준비 중입니다. 곧 실제 로그인이 가능해져요.");
+    setError(null);
+    setLoading(true);
+
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: studentId.trim() + STUDENT_EMAIL_DOMAIN,
+      password,
+    });
+
+    setLoading(false);
+
+    if (signInError) {
+      setError("학번 또는 비밀번호가 올바르지 않습니다.");
+      return;
+    }
+
+    router.push("/");
+    router.refresh();
   }
 
   return (
@@ -107,23 +129,25 @@ function LoginForm() {
         />
       </Field>
 
-      {notice && (
-        <p className="rounded-lg bg-accent-100 px-3 py-2 text-xs text-accent-700">
-          {notice}
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">
+          {error}
         </p>
       )}
 
       <button
         type="submit"
-        className="mt-1 rounded-full bg-accent-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-700"
+        disabled={loading}
+        className="mt-1 rounded-full bg-accent-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-700 disabled:opacity-60"
       >
-        로그인
+        {loading ? "로그인 중..." : "로그인"}
       </button>
     </form>
   );
 }
 
 function SignupForm() {
+  const router = useRouter();
   const [studentId, setStudentId] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -132,10 +156,11 @@ function SignupForm() {
   const [authCode, setAuthCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const isOfficer = department !== "member";
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setNotice(null);
@@ -144,13 +169,60 @@ function SignupForm() {
       setError("비밀번호가 일치하지 않습니다.");
       return;
     }
-    if (isOfficer && authCode.trim().length === 0) {
-      setError("임원 인증코드를 입력해주세요.");
+    if (studentId.trim().length === 0 || name.trim().length === 0) {
+      setError("학번과 이름을 입력해주세요.");
       return;
     }
 
-    // TODO: Supabase 연동 후 실제 회원가입 처리로 교체
-    setNotice("백엔드(Supabase) 연결 준비 중입니다. 곧 실제 가입이 가능해져요.");
+    setLoading(true);
+    const supabase = createClient();
+
+    if (isOfficer) {
+      const { data: codeValid, error: rpcError } = await supabase.rpc(
+        "verify_officer_code",
+        { input_code: authCode.trim() },
+      );
+      if (rpcError || !codeValid) {
+        setLoading(false);
+        setError("임원 인증코드가 올바르지 않습니다.");
+        return;
+      }
+    }
+
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: studentId.trim() + STUDENT_EMAIL_DOMAIN,
+      password,
+    });
+
+    if (signUpError || !signUpData.user) {
+      setLoading(false);
+      setError(
+        signUpError?.message.includes("already registered")
+          ? "이미 가입된 학번입니다."
+          : "회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      );
+      return;
+    }
+
+    const { error: profileError } = await supabase.from("profiles").insert({
+      id: signUpData.user.id,
+      student_id: studentId.trim(),
+      name: name.trim(),
+      department,
+    });
+
+    setLoading(false);
+
+    if (profileError) {
+      setError("프로필 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+
+    setNotice("가입이 완료됐습니다! 로그인 화면으로 이동합니다.");
+    setTimeout(() => {
+      router.push("/");
+      router.refresh();
+    }, 1000);
   }
 
   return (
@@ -229,9 +301,10 @@ function SignupForm() {
 
       <button
         type="submit"
-        className="mt-1 rounded-full bg-accent-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-700"
+        disabled={loading}
+        className="mt-1 rounded-full bg-accent-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-700 disabled:opacity-60"
       >
-        회원가입
+        {loading ? "가입 중..." : "회원가입"}
       </button>
     </form>
   );
