@@ -9,7 +9,8 @@ type EventRow = {
   id: string;
   category: string;
   event_date: string;
-  event_time: string;
+  start_time: string;
+  end_time: string;
   location: string;
   items: string;
   capacity: number;
@@ -75,7 +76,7 @@ export default function CalendarPage() {
     const { data } = await supabase
       .from("events")
       .select(
-        "id, category, event_date, event_time, location, items, capacity, price_range, signup_open_at, status, created_by",
+        "id, category, event_date, start_time, end_time, location, items, capacity, price_range, signup_open_at, status, created_by",
       )
       .order("event_date", { ascending: true });
 
@@ -197,7 +198,8 @@ export default function CalendarPage() {
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm"
               >
                 <span>
-                  {e.event_date} {e.event_time} · {categoryLabel(e.category)} · {e.items} · {e.location}
+                  {e.event_date} {e.start_time}~{e.end_time} · {categoryLabel(e.category)} · {e.items} ·{" "}
+                  {e.location}
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -323,7 +325,9 @@ export default function CalendarPage() {
                       주최자: {(hostNames[e.id] ?? []).join(", ") || "-"}
                     </p>
                     <p className="text-xs text-brand-500">장소: {e.location}</p>
-                    <p className="text-xs text-brand-500">시간: {e.event_time}</p>
+                    <p className="text-xs text-brand-500">
+                      시간: {e.start_time}~{e.end_time}
+                    </p>
                     <p className="text-xs text-brand-500">품목: {e.items}</p>
                     <p className="text-xs text-brand-500">예상 가격대: {e.price_range}</p>
                     <p className="mt-1 text-xs font-semibold text-accent-700">
@@ -463,7 +467,8 @@ function RegisterForm({
   const supabase = useMemo(() => createClient(), []);
   const [category, setCategory] = useState<string>(EVENT_CATEGORIES[1].value);
   const [eventDate, setEventDate] = useState("");
-  const [eventTime, setEventTime] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [items, setItems] = useState("");
   const [capacity, setCapacity] = useState("6");
@@ -475,6 +480,11 @@ function RegisterForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (endTime <= startTime) {
+      setError("종료 시간은 시작 시간보다 늦어야 합니다.");
+      return;
+    }
 
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) {
@@ -488,7 +498,8 @@ function RegisterForm({
       .insert({
         category,
         event_date: eventDate,
-        event_time: eventTime,
+        start_time: startTime,
+        end_time: endTime,
         location,
         items,
         capacity: Number(capacity),
@@ -547,11 +558,23 @@ function RegisterForm({
         />
       </label>
       <label className="block text-sm">
-        <span className="mb-1 block font-medium text-brand-700">시간</span>
+        <span className="mb-1 block font-medium text-brand-700">시작 시간</span>
         <input
           type="time"
-          value={eventTime}
-          onChange={(e) => setEventTime(e.target.value)}
+          step={600}
+          value={startTime}
+          onChange={(e) => setStartTime(e.target.value)}
+          required
+          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block font-medium text-brand-700">종료 시간</span>
+        <input
+          type="time"
+          step={600}
+          value={endTime}
+          onChange={(e) => setEndTime(e.target.value)}
           required
           className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
         />
@@ -590,7 +613,6 @@ function RegisterForm({
         <input
           value={priceRange}
           onChange={(e) => setPriceRange(e.target.value)}
-          placeholder="예: 5,000~8,000원"
           required
           className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
         />
