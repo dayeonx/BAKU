@@ -52,10 +52,12 @@ export default async function Header() {
         </nav>
 
         {profile ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-brand-700">{profile.name}</span>
-            <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
-              {departmentLabel(profile.department)}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-brand-700">
+              {profile.name}
+              <span className="ml-1 font-normal text-brand-300">
+                {departmentLabel(profile.department)}
+              </span>
             </span>
             <LogoutButton />
           </div>
