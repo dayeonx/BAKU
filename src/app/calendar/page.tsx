@@ -556,25 +556,11 @@ function RegisterForm({
       </label>
       <label className="block text-sm">
         <span className="mb-1 block font-medium text-brand-700">시작 시간</span>
-        <input
-          type="time"
-          step={600}
-          value={startTime}
-          onChange={(e) => setStartTime(e.target.value)}
-          required
-          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
-        />
+        <TimeSelect value={startTime} onChange={setStartTime} />
       </label>
       <label className="block text-sm">
         <span className="mb-1 block font-medium text-brand-700">종료 시간</span>
-        <input
-          type="time"
-          step={600}
-          value={endTime}
-          onChange={(e) => setEndTime(e.target.value)}
-          required
-          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
-        />
+        <TimeSelect value={endTime} onChange={setEndTime} />
       </label>
       <label className="block text-sm">
         <span className="mb-1 block font-medium text-brand-700">장소</span>
@@ -646,5 +632,51 @@ function RegisterForm({
         </button>
       </div>
     </form>
+  );
+}
+
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTES_BY_10 = ["00", "10", "20", "30", "40", "50"];
+
+function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [hour, minute] = value ? value.split(":") : ["", ""];
+
+  function update(nextHour: string, nextMinute: string) {
+    if (nextHour && nextMinute) onChange(`${nextHour}:${nextMinute}`);
+  }
+
+  return (
+    <div className="flex gap-2">
+      <select
+        value={hour}
+        onChange={(e) => update(e.target.value, minute || "00")}
+        required
+        className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+      >
+        <option value="" disabled>
+          시
+        </option>
+        {HOURS.map((h) => (
+          <option key={h} value={h}>
+            {h}시
+          </option>
+        ))}
+      </select>
+      <select
+        value={minute}
+        onChange={(e) => update(hour || "00", e.target.value)}
+        required
+        className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+      >
+        <option value="" disabled>
+          분
+        </option>
+        {MINUTES_BY_10.map((m) => (
+          <option key={m} value={m}>
+            {m}분
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
