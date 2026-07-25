@@ -545,7 +545,7 @@ function RegisterForm({
           </p>
         )}
       </label>
-      <label className="block text-sm">
+      <label className="block text-sm sm:col-span-2">
         <span className="mb-1 block font-medium text-brand-700">날짜</span>
         <input
           type="date"
@@ -573,21 +573,21 @@ function RegisterForm({
         />
       </label>
       <label className="block text-sm">
-        <span className="mb-1 block font-medium text-brand-700">베이킹 품목</span>
-        <input
-          value={items}
-          onChange={(e) => setItems(e.target.value)}
-          required
-          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="block text-sm">
         <span className="mb-1 block font-medium text-brand-700">정원</span>
         <input
           type="number"
           min={1}
           value={capacity}
           onChange={(e) => setCapacity(e.target.value)}
+          required
+          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+        />
+      </label>
+      <label className="block text-sm">
+        <span className="mb-1 block font-medium text-brand-700">베이킹 품목</span>
+        <input
+          value={items}
+          onChange={(e) => setItems(e.target.value)}
           required
           className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
         />
