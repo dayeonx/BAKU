@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { departmentLabel } from "@/lib/departments";
+import LogoutButton from "./LogoutButton";
 
 const NAV_LINKS = [
   { href: "/", label: "메인 홈" },
@@ -8,7 +11,22 @@ const NAV_LINKS = [
   { href: "/mypage", label: "마이페이지" },
 ];
 
-export default function Header() {
+export default async function Header() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let profile: { name: string; department: string } | null = null;
+  if (user) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("name, department")
+      .eq("id", user.id)
+      .single();
+    profile = data;
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b border-brand-100 bg-cream/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -33,12 +51,22 @@ export default function Header() {
           ))}
         </nav>
 
-        <Link
-          href="/login"
-          className="rounded-full bg-accent-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-700"
-        >
-          로그인
-        </Link>
+        {profile ? (
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-brand-700">{profile.name}</span>
+            <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
+              {departmentLabel(profile.department)}
+            </span>
+            <LogoutButton />
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="rounded-full bg-accent-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-700"
+          >
+            로그인
+          </Link>
+        )}
       </div>
     </header>
   );
