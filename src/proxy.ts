@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const GATE_EXEMPT_PATHS = ["/login", "/pending-approval", "/inactive", "/change-password"];
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -26,7 +28,33 @@ export async function proxy(request: NextRequest) {
   );
 
   // 세션 갱신 (Server Component에서는 쿠키를 쓸 수 없으므로 필수)
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const path = request.nextUrl.pathname;
+  const isApiRoute = path.startsWith("/api/");
+  const isExempt = GATE_EXEMPT_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+
+  if (user && !isApiRoute && !isExempt) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("status, must_change_password")
+      .eq("id", user.id)
+      .single();
+
+    if (profile) {
+      if (profile.status === "pending_approval") {
+        return NextResponse.redirect(new URL("/pending-approval", request.url));
+      }
+      if (profile.status === "inactive") {
+        return NextResponse.redirect(new URL("/inactive", request.url));
+      }
+      if (profile.must_change_password) {
+        return NextResponse.redirect(new URL("/change-password", request.url));
+      }
+    }
+  }
 
   return supabaseResponse;
 }

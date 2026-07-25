@@ -4,17 +4,9 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-
-const STUDENT_EMAIL_DOMAIN = "@baku.internal";
-
-const DEPARTMENTS = [
-  { value: "member", label: "일반 회원" },
-  { value: "president", label: "회장단" },
-  { value: "executive", label: "집행부" },
-  { value: "planning", label: "기획부" },
-  { value: "treasury", label: "총무부" },
-  { value: "pr", label: "홍보부" },
-];
+import { STUDENT_EMAIL_DOMAIN } from "@/lib/temp-password";
+import { Field, inputClass } from "@/components/FormField";
+import { DEPARTMENTS } from "@/lib/departments";
 
 type Tab = "login" | "signup";
 
@@ -58,26 +50,6 @@ function TabButton({
     </button>
   );
 }
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-sm font-medium text-brand-700">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-const inputClass =
-  "w-full rounded-lg border border-brand-100 bg-white px-3.5 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-brand-300 focus:border-accent-500";
 
 function LoginForm() {
   const router = useRouter();
@@ -150,6 +122,7 @@ function SignupForm() {
   const router = useRouter();
   const [studentId, setStudentId] = useState("");
   const [name, setName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [department, setDepartment] = useState("member");
@@ -208,7 +181,10 @@ function SignupForm() {
       id: signUpData.user.id,
       student_id: studentId.trim(),
       name: name.trim(),
+      phone_number: phoneNumber.trim(),
       department,
+      status: "pending_approval",
+      must_change_password: false,
     });
 
     setLoading(false);
@@ -218,11 +194,11 @@ function SignupForm() {
       return;
     }
 
-    setNotice("가입이 완료됐습니다! 로그인 화면으로 이동합니다.");
+    setNotice("가입 신청이 완료됐습니다! 임원진 승인 후 로그인하실 수 있어요.");
     setTimeout(() => {
       router.push("/");
       router.refresh();
-    }, 1000);
+    }, 1500);
   }
 
   return (
@@ -241,6 +217,15 @@ function SignupForm() {
           className={inputClass}
           value={name}
           onChange={(e) => setName(e.target.value)}
+          required
+        />
+      </Field>
+      <Field label="전화번호">
+        <input
+          className={inputClass}
+          value={phoneNumber}
+          onChange={(e) => setPhoneNumber(e.target.value)}
+          placeholder="010-0000-0000"
           required
         />
       </Field>
