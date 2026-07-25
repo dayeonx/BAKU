@@ -30,6 +30,8 @@ const HISTORY = [
 
 const BAKING_PLACE = {
   name: "슈가마미의 베이킹 스튜디오",
+  address: "삼선교로16길 16-3 2층 (지번: 삼선동2가 132)",
+  phone: "0507-1342-6976",
   mapUrl:
     "https://map.naver.com/p/entry/place/1978941733?placePath=%2Fhome%3Fentry%3Dplt%26from%3Dmap%26fromPanelNum%3D1%26additionalHeight%3D76%26timestamp%3D202607241919%26locale%3Dko%26svcName%3Dmap_pcv5&searchType=place&lng=127.0103229&lat=37.5874425&c=15.00,0,0,0,dh",
   blogUrl: "https://m.blog.naver.com/tmxkdbfl22/224133370715",
@@ -74,6 +76,8 @@ export default function Home() {
         <h2 className="mb-6 text-xl font-bold text-brand-700">베이킹 활동 장소</h2>
         <div className="rounded-2xl border border-brand-100 bg-white p-6">
           <h3 className="text-lg font-bold text-brand-700">{BAKING_PLACE.name}</h3>
+          <p className="mt-2 text-sm text-brand-500">{BAKING_PLACE.address}</p>
+          <p className="mt-1 text-sm text-brand-500">{BAKING_PLACE.phone}</p>
           <p className="mt-2 text-sm font-semibold text-accent-700">
             {BAKING_PLACE.discount}
           </p>
