@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { tempPasswordFor, STUDENT_EMAIL_DOMAIN } from "@/lib/temp-password";
+import { initialCredentialFor, STUDENT_EMAIL_DOMAIN } from "@/lib/temp-password";
 
 type MemberRow = {
   student_id: string;
   name: string;
-  phone_number?: string;
+  college?: string;
+  major?: string;
   department?: string;
 };
 
@@ -55,9 +56,11 @@ export async function POST(request: Request) {
       ? (row.department as string)
       : "member";
 
+    const initialCredential = initialCredentialFor(studentId);
+
     const { data: created_user, error: createError } = await admin.auth.admin.createUser({
       email: studentId + STUDENT_EMAIL_DOMAIN,
-      password: tempPasswordFor(studentId),
+      password: initialCredential,
       email_confirm: true,
     });
 
@@ -74,8 +77,11 @@ export async function POST(request: Request) {
     const { error: profileError } = await admin.from("profiles").insert({
       id: created_user.user.id,
       student_id: studentId,
+      username: initialCredential,
+      must_change_username: true,
       name,
-      phone_number: row.phone_number ? String(row.phone_number).trim() : null,
+      college: row.college ? String(row.college).trim() : null,
+      major: row.major ? String(row.major).trim() : null,
       department,
       status: "active",
       must_change_password: true,

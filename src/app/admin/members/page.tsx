@@ -8,8 +8,10 @@ import { DEPARTMENTS, departmentLabel } from "@/lib/departments";
 type Profile = {
   id: string;
   student_id: string;
+  username: string;
   name: string;
-  phone_number: string | null;
+  college: string | null;
+  major: string | null;
   department: string;
   status: "pending_approval" | "active" | "inactive";
   semester_count: number;
@@ -61,7 +63,7 @@ export default function AdminMembersPage() {
     if (officer) {
       const { data } = await supabase
         .from("profiles")
-        .select("id, student_id, name, phone_number, department, status, semester_count")
+        .select("id, student_id, username, name, college, major, department, status, semester_count")
         .order("department", { ascending: true })
         .order("name", { ascending: true });
       setProfiles(data ?? []);
@@ -106,7 +108,9 @@ export default function AdminMembersPage() {
     });
     const json = await res.json();
     if (res.ok) {
-      setMessage(`${name} 님의 임시 비밀번호: ${json.temp_password} (다음 로그인 시 변경 강제됨)`);
+      setMessage(
+        `${name} 님의 비밀번호가 학번(${json.temp_password})으로 초기화됐습니다. 다음 로그인 시 변경이 강제됩니다.`,
+      );
     } else {
       setMessage(json.error ?? "비밀번호 초기화에 실패했습니다.");
     }
@@ -127,7 +131,8 @@ export default function AdminMembersPage() {
     const members = rows.map((row) => ({
       student_id: String(row["학번"] ?? "").trim(),
       name: String(row["이름"] ?? "").trim(),
-      phone_number: String(row["전화번호"] ?? "").trim(),
+      college: String(row["단과대"] ?? "").trim(),
+      major: String(row["학과"] ?? "").trim(),
       department: departmentValueFromLabel(String(row["부서"] ?? "member").trim()),
     }));
 
@@ -183,8 +188,8 @@ export default function AdminMembersPage() {
         <section className="mt-8 rounded-xl border border-brand-100 bg-white p-5">
           <h2 className="text-sm font-bold text-brand-700">엑셀로 회원 일괄 등록</h2>
           <p className="mt-1 text-xs text-brand-500">
-            열 이름: 학번, 이름, 전화번호, 부서(선택, 예: 일반 회원/집행부/기획부/총무부/홍보부/회장단). 임시
-            비밀번호는 학번 뒷 6자리로 자동 생성됩니다.
+            열 이름: 학번, 이름, 단과대, 학과, 부서(선택, 예: 일반 회원/집행부/기획부/총무부/홍보부/회장단). 최초
+            아이디·비밀번호는 모두 학번으로 발급되며, 첫 로그인 시 변경이 강제됩니다.
           </p>
           <div className="mt-3 flex items-center gap-3">
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="text-sm" />
@@ -288,7 +293,10 @@ function RowInfo({ profile }: { profile: Profile }) {
     <div className="text-sm">
       <span className="font-semibold text-brand-700">{profile.name}</span>
       <span className="ml-2 text-brand-500">{profile.student_id}</span>
-      <span className="ml-2 text-brand-300">{profile.phone_number ?? "-"}</span>
+      <span className="ml-2 text-brand-300">@{profile.username}</span>
+      <span className="ml-2 text-brand-300">
+        {[profile.college, profile.major].filter(Boolean).join(" · ") || "-"}
+      </span>
       <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-xs text-brand-700">
         {departmentLabel(profile.department)}
       </span>

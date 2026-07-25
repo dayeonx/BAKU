@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { tempPasswordFor } from "@/lib/temp-password";
+import { initialCredentialFor } from "@/lib/temp-password";
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabase();
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
-  const newPassword = tempPasswordFor(profile.student_id);
+  const newPassword = initialCredentialFor(profile.student_id);
 
   const { error: updateError } = await admin.auth.admin.updateUserById(id, {
     password: newPassword,

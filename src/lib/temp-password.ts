@@ -1,7 +1,6 @@
-// 임시 비밀번호 규칙: 학번의 숫자만 남긴 뒤 마지막 6자리
-export function tempPasswordFor(studentId: string): string {
-  const digits = studentId.replace(/\D/g, "");
-  return digits.slice(-6).padStart(6, "0");
+// 최초 계정 생성 시 아이디/비밀번호는 모두 학번 그대로 발급되고, 이후 본인이 강제로 변경한다.
+export function initialCredentialFor(studentId: string): string {
+  return studentId.trim();
 }
 
 export const STUDENT_EMAIL_DOMAIN = "@baku.internal";

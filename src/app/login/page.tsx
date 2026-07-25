@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { STUDENT_EMAIL_DOMAIN } from "@/lib/temp-password";
 import { Field, inputClass } from "@/components/FormField";
 import { DEPARTMENTS } from "@/lib/departments";
+import { isValidUsername, isValidPassword, CREDENTIAL_FORMAT_HINT } from "@/lib/validation";
 
 type Tab = "login" | "signup";
 
@@ -53,7 +54,7 @@ function TabButton({
 
 function LoginForm() {
   const router = useRouter();
-  const [studentId, setStudentId] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,15 +65,27 @@ function LoginForm() {
     setLoading(true);
 
     const supabase = createClient();
+
+    const { data: email, error: resolveError } = await supabase.rpc(
+      "resolve_login_email",
+      { input_username: username.trim() },
+    );
+
+    if (resolveError || !email) {
+      setLoading(false);
+      setError("아이디 또는 비밀번호가 올바르지 않습니다.");
+      return;
+    }
+
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: studentId.trim() + STUDENT_EMAIL_DOMAIN,
+      email,
       password,
     });
 
     setLoading(false);
 
     if (signInError) {
-      setError("학번 또는 비밀번호가 올바르지 않습니다.");
+      setError("아이디 또는 비밀번호가 올바르지 않습니다.");
       return;
     }
 
@@ -82,12 +95,12 @@ function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-      <Field label="학번">
+      <Field label="아이디">
         <input
           className={inputClass}
-          value={studentId}
-          onChange={(e) => setStudentId(e.target.value)}
-          placeholder="2024xxxxxx"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="최초 로그인 시에는 학번"
           required
         />
       </Field>
@@ -122,7 +135,9 @@ function SignupForm() {
   const router = useRouter();
   const [studentId, setStudentId] = useState("");
   const [name, setName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [college, setCollege] = useState("");
+  const [major, setMajor] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [department, setDepartment] = useState("member");
@@ -144,6 +159,14 @@ function SignupForm() {
     }
     if (studentId.trim().length === 0 || name.trim().length === 0) {
       setError("학번과 이름을 입력해주세요.");
+      return;
+    }
+    if (!isValidUsername(username)) {
+      setError(`아이디: ${CREDENTIAL_FORMAT_HINT}`);
+      return;
+    }
+    if (!isValidPassword(password)) {
+      setError(`비밀번호: ${CREDENTIAL_FORMAT_HINT}`);
       return;
     }
 
@@ -180,8 +203,11 @@ function SignupForm() {
     const { error: profileError } = await supabase.from("profiles").insert({
       id: signUpData.user.id,
       student_id: studentId.trim(),
+      username: username.trim(),
+      must_change_username: false,
       name: name.trim(),
-      phone_number: phoneNumber.trim(),
+      college: college.trim(),
+      major: major.trim(),
       department,
       status: "pending_approval",
       must_change_password: false,
@@ -190,7 +216,11 @@ function SignupForm() {
     setLoading(false);
 
     if (profileError) {
-      setError("프로필 저장에 실패했습니다. 잠시 후 다시 시도해주세요.");
+      setError(
+        profileError.message.includes("duplicate")
+          ? "이미 사용 중인 학번 또는 아이디입니다."
+          : "프로필 저장에 실패했습니다. 잠시 후 다시 시도해주세요.",
+      );
       return;
     }
 
@@ -220,16 +250,34 @@ function SignupForm() {
           required
         />
       </Field>
-      <Field label="전화번호">
+      <Field label="단과대">
         <input
           className={inputClass}
-          value={phoneNumber}
-          onChange={(e) => setPhoneNumber(e.target.value)}
-          placeholder="010-0000-0000"
+          value={college}
+          onChange={(e) => setCollege(e.target.value)}
+          placeholder="예: 공과대학"
           required
         />
       </Field>
-      <Field label="비밀번호">
+      <Field label="학과">
+        <input
+          className={inputClass}
+          value={major}
+          onChange={(e) => setMajor(e.target.value)}
+          placeholder="예: 컴퓨터학과"
+          required
+        />
+      </Field>
+      <Field label="아이디 (영문+숫자 조합)">
+        <input
+          className={inputClass}
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="baku2024"
+          required
+        />
+      </Field>
+      <Field label="비밀번호 (영문+숫자 조합)">
         <input
           className={inputClass}
           type="password"

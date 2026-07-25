@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const GATE_EXEMPT_PATHS = ["/login", "/pending-approval", "/inactive", "/change-password"];
+const GATE_EXEMPT_PATHS = ["/login", "/pending-approval", "/inactive", "/account-setup"];
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -39,7 +39,7 @@ export async function proxy(request: NextRequest) {
   if (user && !isApiRoute && !isExempt) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("status, must_change_password")
+      .select("status, must_change_password, must_change_username")
       .eq("id", user.id)
       .single();
 
@@ -50,8 +50,8 @@ export async function proxy(request: NextRequest) {
       if (profile.status === "inactive") {
         return NextResponse.redirect(new URL("/inactive", request.url));
       }
-      if (profile.must_change_password) {
-        return NextResponse.redirect(new URL("/change-password", request.url));
+      if (profile.must_change_username || profile.must_change_password) {
+        return NextResponse.redirect(new URL("/account-setup", request.url));
       }
     }
   }
