@@ -26,6 +26,13 @@ function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function formatOpenAt(iso: string): string {
+  const d = new Date(iso);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${hh}시 ${mm}분부터 참여 신청 가능합니다.`;
+}
+
 function buildMonthGrid(monthDate: Date): Date[] {
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
@@ -157,27 +164,12 @@ export default function CalendarPage() {
   const selectedEvents = eventsByDate[selectedDate] ?? [];
 
   const todayKey = toDateKey(new Date());
-  const waitingEvents = useMemo(
+  const signupEvents = useMemo(
     () =>
       events
-        .filter(
-          (e) => e.status === "approved" && e.event_date >= todayKey && new Date(e.signup_open_at) > new Date(),
-        )
-        .sort((a, b) => a.event_date.localeCompare(b.event_date)),
+        .filter((e) => e.status === "approved" && e.event_date >= todayKey)
+        .sort((a, b) => a.event_date.localeCompare(b.event_date) || a.signup_open_at.localeCompare(b.signup_open_at)),
     [events, todayKey],
-  );
-  const openEvents = useMemo(
-    () =>
-      events
-        .filter(
-          (e) =>
-            e.status === "approved" &&
-            e.event_date >= todayKey &&
-            new Date(e.signup_open_at) <= new Date() &&
-            (remaining[e.id] ?? 0) > 0,
-        )
-        .sort((a, b) => a.event_date.localeCompare(b.event_date)),
-    [events, remaining, todayKey],
   );
 
   return (
@@ -397,59 +389,64 @@ export default function CalendarPage() {
         )}
       </div>
 
-      {/* 참여 신청 가능 일정 모음 */}
-      <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <div className="rounded-2xl border border-brand-100 bg-white p-4">
-          <h2 className="mb-3 text-sm font-bold text-brand-700">
-            지금 참여 신청 가능한 일정
-          </h2>
-          {openEvents.length === 0 && (
-            <p className="text-xs text-brand-300">지금 신청 가능한 일정이 없어요.</p>
-          )}
-          <ul className="space-y-2">
-            {openEvents.map((e) => (
-              <li key={e.id} className="flex items-center justify-between gap-2 text-xs text-brand-500">
-                <span>
+      {/* 베이킹 참여 신청 */}
+      <div className="mt-6 rounded-2xl border border-brand-100 bg-white p-4">
+        <h2 className="mb-3 text-sm font-bold text-brand-700">베이킹 참여 신청</h2>
+        {signupEvents.length === 0 && (
+          <p className="text-xs text-brand-300">신청 가능한 일정이 없어요.</p>
+        )}
+        <ul className="space-y-3">
+          {signupEvents.map((e) => {
+            const isOpen = new Date(e.signup_open_at) <= new Date();
+            const spots = remaining[e.id] ?? 0;
+            const joined = myParticipations.has(e.id);
+            return (
+              <li
+                key={e.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-100 px-3 py-2"
+              >
+                <div className="text-xs text-brand-500">
                   <span
                     className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
                     style={{ backgroundColor: categoryColor(e.category) }}
                   />
-                  {e.event_date} · {categoryLabel(e.category)} · {e.items} · 잔여{" "}
-                  {remaining[e.id] ?? 0}자리
-                </span>
-                {userId && !myParticipations.has(e.id) && (
-                  <button
-                    onClick={() => handleJoin(e.id)}
-                    className="shrink-0 rounded-full bg-accent-500 px-3 py-1 text-[11px] font-semibold text-white hover:bg-accent-700"
-                  >
-                    참여 신청
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
+                  {e.event_date} · {categoryLabel(e.category)} · {e.items} · 잔여 {Math.max(spots, 0)}자리
+                  {!isOpen && (
+                    <div className="mt-1 text-brand-300">{formatOpenAt(e.signup_open_at)}</div>
+                  )}
+                </div>
 
-        <div className="rounded-2xl border border-brand-100 bg-white p-4">
-          <h2 className="mb-3 text-sm font-bold text-brand-700">
-            앞으로 참여 신청 가능한 일정 (대기중)
-          </h2>
-          {waitingEvents.length === 0 && (
-            <p className="text-xs text-brand-300">대기 중인 일정이 없어요.</p>
-          )}
-          <ul className="space-y-2">
-            {waitingEvents.map((e) => (
-              <li key={e.id} className="text-xs text-brand-500">
-                <span
-                  className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
-                  style={{ backgroundColor: categoryColor(e.category) }}
-                />
-                {e.event_date} · {categoryLabel(e.category)} · {e.items} ·{" "}
-                {new Date(e.signup_open_at).toLocaleString("ko-KR")}부터 신청 가능
+                {userId &&
+                  (joined ? (
+                    <span className="shrink-0 rounded-full bg-brand-50 px-3 py-1 text-[11px] font-semibold text-brand-500">
+                      신청 완료
+                    </span>
+                  ) : !isOpen ? (
+                    <button
+                      disabled
+                      className="shrink-0 cursor-not-allowed rounded-full bg-brand-100 px-3 py-1 text-[11px] font-semibold text-brand-300"
+                    >
+                      대기중
+                    </button>
+                  ) : spots <= 0 ? (
+                    <button
+                      disabled
+                      className="shrink-0 cursor-not-allowed rounded-full bg-brand-100 px-3 py-1 text-[11px] font-semibold text-brand-300"
+                    >
+                      마감
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleJoin(e.id)}
+                      className="shrink-0 rounded-full bg-accent-500 px-3 py-1 text-[11px] font-semibold text-white hover:bg-accent-700"
+                    >
+                      참여 신청
+                    </button>
+                  ))}
               </li>
-            ))}
-          </ul>
-        </div>
+            );
+          })}
+        </ul>
       </div>
     </div>
   );
