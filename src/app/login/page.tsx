@@ -233,6 +233,9 @@ function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <p className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
+        회원가입 후에는 임원진 승인 후에 로그인이 가능합니다.
+      </p>
       <Field label="학번">
         <input
           className={inputClass}
@@ -255,7 +258,7 @@ function SignupForm() {
           className={inputClass}
           value={college}
           onChange={(e) => setCollege(e.target.value)}
-          placeholder="예: 공과대학"
+          placeholder="예: 이과대학"
           required
         />
       </Field>
@@ -264,7 +267,7 @@ function SignupForm() {
           className={inputClass}
           value={major}
           onChange={(e) => setMajor(e.target.value)}
-          placeholder="예: 컴퓨터학과"
+          placeholder="예: 화학과"
           required
         />
       </Field>
@@ -273,7 +276,7 @@ function SignupForm() {
           className={inputClass}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          placeholder="baku2024"
+          placeholder="baku2026"
           required
         />
       </Field>
