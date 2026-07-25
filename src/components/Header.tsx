@@ -53,7 +53,7 @@ export default async function Header() {
 
         {profile ? (
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-brand-700">
+            <span className="text-xs font-semibold text-brand-700">
               {profile.name}
               <span className="ml-1 font-normal text-brand-300">
                 {departmentLabel(profile.department)}
