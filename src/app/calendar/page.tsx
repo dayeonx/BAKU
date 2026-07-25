@@ -155,33 +155,36 @@ export default function CalendarPage() {
   const days = useMemo(() => buildMonthGrid(monthDate), [monthDate]);
   const selectedEvents = eventsByDate[selectedDate] ?? [];
 
+  const todayKey = toDateKey(new Date());
+  const waitingEvents = useMemo(
+    () =>
+      events
+        .filter(
+          (e) => e.status === "approved" && e.event_date >= todayKey && new Date(e.signup_open_at) > new Date(),
+        )
+        .sort((a, b) => a.event_date.localeCompare(b.event_date)),
+    [events, todayKey],
+  );
+  const openEvents = useMemo(
+    () =>
+      events
+        .filter(
+          (e) =>
+            e.status === "approved" &&
+            e.event_date >= todayKey &&
+            new Date(e.signup_open_at) <= new Date() &&
+            (remaining[e.id] ?? 0) > 0,
+        )
+        .sort((a, b) => a.event_date.localeCompare(b.event_date)),
+    [events, remaining, todayKey],
+  );
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold text-brand-700">캘린더</h1>
-        {userId && (
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="rounded-full bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-700"
-          >
-            자유 주최 일정 등록
-          </button>
-        )}
-      </div>
+      <h1 className="text-2xl font-extrabold text-brand-700">캘린더</h1>
 
       {message && (
         <p className="mt-4 rounded-lg bg-accent-100 px-4 py-3 text-sm text-accent-700">{message}</p>
-      )}
-
-      {showForm && (
-        <RegisterForm
-          onClose={() => setShowForm(false)}
-          onCreated={() => {
-            setShowForm(false);
-            setMessage("일정이 등록됐습니다. 임원진 승인 후 캘린더에 노출됩니다.");
-            loadEvents();
-          }}
-        />
       )}
 
       {isOfficer && pending.length > 0 && (
@@ -359,11 +362,104 @@ export default function CalendarPage() {
           </div>
         </div>
       </div>
+
+      {/* 일정 등록 */}
+      <div className="mt-8 rounded-2xl border border-brand-100 bg-white p-5">
+        {userId ? (
+          <>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-brand-700">주최 일정 등록</h2>
+              <button
+                onClick={() => setShowForm((v) => !v)}
+                className="rounded-full bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-700"
+              >
+                {showForm ? "닫기" : "주최 일정 등록"}
+              </button>
+            </div>
+            {showForm && (
+              <RegisterForm
+                isOfficer={isOfficer}
+                onClose={() => setShowForm(false)}
+                onCreated={() => {
+                  setShowForm(false);
+                  setMessage("일정이 등록됐습니다. 임원진 승인 후 캘린더에 노출됩니다.");
+                  loadEvents();
+                }}
+              />
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-brand-500">로그인 후 일정을 등록할 수 있어요.</p>
+        )}
+      </div>
+
+      {/* 참여 신청 가능 일정 모음 */}
+      <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="rounded-2xl border border-brand-100 bg-white p-4">
+          <h2 className="mb-3 text-sm font-bold text-brand-700">
+            지금 참여 신청 가능한 일정
+          </h2>
+          {openEvents.length === 0 && (
+            <p className="text-xs text-brand-300">지금 신청 가능한 일정이 없어요.</p>
+          )}
+          <ul className="space-y-2">
+            {openEvents.map((e) => (
+              <li key={e.id} className="flex items-center justify-between gap-2 text-xs text-brand-500">
+                <span>
+                  <span
+                    className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
+                    style={{ backgroundColor: categoryColor(e.category) }}
+                  />
+                  {e.event_date} · {categoryLabel(e.category)} · {e.items} · 잔여{" "}
+                  {remaining[e.id] ?? 0}자리
+                </span>
+                {userId && !myParticipations.has(e.id) && (
+                  <button
+                    onClick={() => handleJoin(e.id)}
+                    className="shrink-0 rounded-full bg-accent-500 px-3 py-1 text-[11px] font-semibold text-white hover:bg-accent-700"
+                  >
+                    참여 신청
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-brand-100 bg-white p-4">
+          <h2 className="mb-3 text-sm font-bold text-brand-700">
+            앞으로 참여 신청 가능한 일정 (대기중)
+          </h2>
+          {waitingEvents.length === 0 && (
+            <p className="text-xs text-brand-300">대기 중인 일정이 없어요.</p>
+          )}
+          <ul className="space-y-2">
+            {waitingEvents.map((e) => (
+              <li key={e.id} className="text-xs text-brand-500">
+                <span
+                  className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
+                  style={{ backgroundColor: categoryColor(e.category) }}
+                />
+                {e.event_date} · {categoryLabel(e.category)} · {e.items} ·{" "}
+                {new Date(e.signup_open_at).toLocaleString("ko-KR")}부터 신청 가능
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
 
-function RegisterForm({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function RegisterForm({
+  isOfficer,
+  onClose,
+  onCreated,
+}: {
+  isOfficer: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const [category, setCategory] = useState<string>(EVENT_CATEGORIES[1].value);
   const [eventDate, setEventDate] = useState("");
@@ -422,17 +518,23 @@ function RegisterForm({ onClose, onCreated }: { onClose: () => void; onCreated: 
     >
       <label className="block text-sm sm:col-span-2">
         <span className="mb-1 block font-medium text-brand-700">종류</span>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
-        >
-          {EVENT_CATEGORIES.filter((c) => c.value !== "regular").map((c) => (
-            <option key={c.value} value={c.value}>
-              {c.label}
-            </option>
-          ))}
-        </select>
+        {isOfficer ? (
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+          >
+            {EVENT_CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <p className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-sm text-brand-500">
+            자유주최 (일반 회원은 자유주최만 등록할 수 있어요)
+          </p>
+        )}
       </label>
       <label className="block text-sm">
         <span className="mb-1 block font-medium text-brand-700">날짜</span>
