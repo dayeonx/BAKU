@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { EVENT_CATEGORIES, categoryLabel, categoryColor } from "@/lib/eventCategories";
+import { BAKING_PLACE } from "@/lib/bakingPlace";
+
+// 스튜디오 예약이 필요한 활동 종류 (직접 만나서 굽는 활동)
+const STUDIO_REQUIRED_CATEGORIES = ["free", "regular", "team_mission", "monthly_special"];
 
 type EventRow = {
   id: string;
@@ -472,12 +477,20 @@ function RegisterForm({
   const [priceRange, setPriceRange] = useState("");
   const [signupOpenDate, setSignupOpenDate] = useState("");
   const [signupOpenTime, setSignupOpenTime] = useState("");
+  const [studioConfirmed, setStudioConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const needsStudio = STUDIO_REQUIRED_CATEGORIES.includes(category);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (needsStudio && !studioConfirmed) {
+      setError("베이킹 스튜디오 예약 여부를 먼저 확인해주세요.");
+      return;
+    }
 
     if (endTime <= startTime) {
       setError("종료 시간은 시작 시간보다 늦어야 합니다.");
@@ -545,6 +558,35 @@ function RegisterForm({
           </p>
         )}
       </label>
+
+      {needsStudio && (
+        <div className="rounded-lg border border-brand-100 bg-brand-50 p-3 text-sm sm:col-span-2">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={studioConfirmed}
+              onChange={(e) => setStudioConfirmed(e.target.checked)}
+            />
+            베이킹 스튜디오 예약을 완료하셨나요?
+          </label>
+          {!studioConfirmed && (
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              <a
+                href={BAKING_PLACE.blogUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-accent-700 hover:underline"
+              >
+                예약하러 가기 ({BAKING_PLACE.phone})
+              </a>
+              <Link href="/guide" className="font-semibold text-accent-700 hover:underline">
+                주최하는 방법을 모르겠다면? 운영규칙 &gt; 주최 가이드
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
       <label className="block text-sm sm:col-span-2">
         <span className="mb-1 block font-medium text-brand-700">날짜</span>
         <input
