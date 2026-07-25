@@ -470,7 +470,8 @@ function RegisterForm({
   const [items, setItems] = useState("");
   const [capacity, setCapacity] = useState("6");
   const [priceRange, setPriceRange] = useState("");
-  const [signupOpenAt, setSignupOpenAt] = useState("");
+  const [signupOpenDate, setSignupOpenDate] = useState("");
+  const [signupOpenTime, setSignupOpenTime] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -501,7 +502,7 @@ function RegisterForm({
         items,
         capacity: Number(capacity),
         price_range: priceRange,
-        signup_open_at: new Date(signupOpenAt).toISOString(),
+        signup_open_at: new Date(`${signupOpenDate}T${signupOpenTime}`).toISOString(),
         created_by: userData.user.id,
       })
       .select("id")
@@ -602,13 +603,16 @@ function RegisterForm({
       </label>
       <label className="block text-sm sm:col-span-2">
         <span className="mb-1 block font-medium text-brand-700">신청 오픈 일시</span>
-        <input
-          type="datetime-local"
-          value={signupOpenAt}
-          onChange={(e) => setSignupOpenAt(e.target.value)}
-          required
-          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
-        />
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="date"
+            value={signupOpenDate}
+            onChange={(e) => setSignupOpenDate(e.target.value)}
+            required
+            className="rounded-lg border border-brand-100 px-3 py-2 text-sm"
+          />
+          <TimeSelect value={signupOpenTime} onChange={setSignupOpenTime} />
+        </div>
       </label>
 
       {error && (
