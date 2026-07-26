@@ -725,8 +725,7 @@ function RegisterForm({
 
     if (insertError || !created) {
       setLoading(false);
-      console.error("insertError", insertError);
-      setError("일정 등록에 실패했습니다: " + (insertError?.message ?? "unknown"));
+      setError("일정 등록에 실패했습니다.");
       return;
     }
 
