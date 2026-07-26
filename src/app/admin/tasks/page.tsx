@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { inputClass } from "@/components/FormField";
 
@@ -57,7 +57,7 @@ type TaskStep = {
   due_date: string | null;
 };
 
-type Comment = { id: string; comment_text: string; created_at: string; author_name: string };
+type Comment = { id: string; profile_id: string; comment_text: string; created_at: string; author_name: string };
 
 export default function AdminTasksPage() {
   const supabase = createClient();
@@ -276,6 +276,73 @@ function CompleteToggle({
   );
 }
 
+function CompleteButton({
+  task,
+  myDepartment,
+  supabase,
+  onDone,
+}: {
+  task: TaskStep;
+  myDepartment: string | null;
+  supabase: ReturnType<typeof createClient>;
+  onDone: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const isDone = task.status === "done";
+  const canComplete = myDepartment === task.department;
+
+  async function handleReopen() {
+    await supabase
+      .from("work_tasks")
+      .update({ status: "in_progress", updated_at: new Date().toISOString() })
+      .eq("id", task.id);
+    onDone();
+  }
+
+  async function handleConfirmComplete() {
+    await supabase.from("work_tasks").update({ status: "done", updated_at: new Date().toISOString() }).eq("id", task.id);
+    setConfirming(false);
+    onDone();
+  }
+
+  if (confirming) {
+    return (
+      <span className="flex items-center gap-1.5 text-xs">
+        <span className="text-brand-700">완료하였습니까?</span>
+        <button
+          onClick={handleConfirmComplete}
+          className="rounded-full bg-accent-500 px-2.5 py-1 font-semibold text-white hover:bg-accent-700"
+        >
+          예
+        </button>
+        <button
+          onClick={() => setConfirming(false)}
+          className="rounded-full bg-brand-100 px-2.5 py-1 font-semibold text-brand-700 hover:bg-brand-200"
+        >
+          아니오
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => (isDone ? handleReopen() : setConfirming(true))}
+      disabled={!isDone && !canComplete}
+      title={!isDone && !canComplete ? "담당 부서만 완료 처리할 수 있어요" : undefined}
+      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+        isDone
+          ? "bg-brand-700 text-white hover:bg-brand-900"
+          : canComplete
+            ? "bg-accent-500 text-white hover:bg-accent-700"
+            : "cursor-not-allowed bg-brand-100 text-brand-300"
+      }`}
+    >
+      {isDone ? "완료" : "진행중"}
+    </button>
+  );
+}
+
 function ProjectCard({
   project,
   steps,
@@ -302,7 +369,6 @@ function ProjectCard({
   const [showForm, setShowForm] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [requirements, setRequirements] = useState("");
   const [department, setDepartment] = useState(BOARD_DEPARTMENTS[0].value);
   const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
@@ -321,14 +387,12 @@ function ProjectCard({
       department,
       title: title.trim(),
       description: description.trim() || null,
-      requirements: requirements.trim() || null,
       due_date: dueDate || null,
       created_by: userId,
     });
     setSaving(false);
     setTitle("");
     setDescription("");
-    setRequirements("");
     setDueDate("");
     setDepartment(BOARD_DEPARTMENTS[0].value);
     setShowForm(false);
@@ -364,13 +428,6 @@ function ProjectCard({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="설명"
-            rows={2}
-            className={inputClass}
-          />
-          <textarea
-            value={requirements}
-            onChange={(e) => setRequirements(e.target.value)}
-            placeholder="요구사항"
             rows={2}
             className={inputClass}
           />
@@ -468,19 +525,23 @@ function TaskDetailPanel({
   const [commentText, setCommentText] = useState("");
   const [loadingComments, setLoadingComments] = useState(true);
 
-  const canComplete = myDepartment === task.department;
-
   const loadComments = useCallback(async () => {
     setLoadingComments(true);
     const { data } = await supabase
       .from("work_task_comments")
-      .select("id, comment_text, created_at, profiles(name)")
+      .select("id, profile_id, comment_text, created_at, profiles(name)")
       .eq("task_id", task.id)
       .order("created_at", { ascending: true });
     setComments(
       (data ?? []).map((r) => {
         const p = r.profiles as unknown as { name: string } | null;
-        return { id: r.id, comment_text: r.comment_text, created_at: r.created_at, author_name: p?.name ?? "-" };
+        return {
+          id: r.id,
+          profile_id: r.profile_id,
+          comment_text: r.comment_text,
+          created_at: r.created_at,
+          author_name: p?.name ?? "-",
+        };
       }),
     );
     setLoadingComments(false);
@@ -499,12 +560,6 @@ function TaskDetailPanel({
     });
     setCommentText("");
     loadComments();
-  }
-
-  async function handleStatusChange(status: string) {
-    if (status === "done" && !canComplete) return;
-    await supabase.from("work_tasks").update({ status, updated_at: new Date().toISOString() }).eq("id", task.id);
-    onDone();
   }
 
   async function handleDeptChange(department: string) {
@@ -530,19 +585,7 @@ function TaskDetailPanel({
         </button>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <select
-          value={task.status}
-          onChange={(e) => handleStatusChange(e.target.value)}
-          className="rounded-lg border border-brand-100 px-2 py-1 text-xs"
-        >
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value} disabled={s.value === "done" && !canComplete}>
-              {s.label}
-              {s.value === "done" && !canComplete ? " (담당 부서 전용)" : ""}
-            </option>
-          ))}
-        </select>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <select
           value={task.department}
           onChange={(e) => handleDeptChange(e.target.value)}
@@ -557,6 +600,7 @@ function TaskDetailPanel({
         {task.due_date && (
           <span className="rounded-lg bg-brand-50 px-2 py-1 text-xs text-brand-500">마감 {task.due_date}</span>
         )}
+        <CompleteButton task={task} myDepartment={myDepartment} supabase={supabase} onDone={onDone} />
       </div>
 
       {task.description && (
@@ -565,31 +609,40 @@ function TaskDetailPanel({
           <p className="mt-1 whitespace-pre-wrap text-sm text-brand-500">{task.description}</p>
         </div>
       )}
-      {task.requirements && (
-        <div className="mt-3">
-          <p className="text-xs font-bold text-brand-700">요구사항</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-brand-500">{task.requirements}</p>
-        </div>
-      )}
+
+      <FileAttachments taskId={task.id} userId={userId} supabase={supabase} />
 
       <button onClick={handleDelete} className="mt-4 self-start text-xs text-brand-300 hover:text-red-600">
         업무 단계 삭제
       </button>
 
-      <div className="mt-6 flex-1 border-t border-brand-100 pt-4">
+      <div className="mt-6 flex flex-1 flex-col border-t border-brand-100 pt-4">
         <p className="text-xs font-bold text-brand-700">질문 · 댓글</p>
-        <div className="mt-2 space-y-2">
+        <div className="mt-2 flex-1 space-y-2 overflow-y-auto">
           {loadingComments ? (
             <p className="text-xs text-brand-300">불러오는 중...</p>
           ) : comments.length === 0 ? (
             <p className="text-xs text-brand-300">아직 댓글이 없어요.</p>
           ) : (
-            comments.map((c) => (
-              <div key={c.id} className="rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
-                <span className="font-semibold">{c.author_name}</span>
-                <span className="ml-1 text-brand-500">{c.comment_text}</span>
-              </div>
-            ))
+            comments.map((c) => {
+              const mine = c.profile_id === userId;
+              return (
+                <div key={c.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[75%] ${mine ? "items-end" : "items-start"}`}>
+                    {!mine && <p className="mb-0.5 px-1 text-[11px] text-brand-300">{c.author_name}</p>}
+                    <div
+                      className={`rounded-2xl px-3 py-2 text-xs ${
+                        mine
+                          ? "rounded-br-sm bg-accent-500 text-white"
+                          : "rounded-bl-sm bg-brand-50 text-brand-700"
+                      }`}
+                    >
+                      {c.comment_text}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
         <div className="mt-3 flex gap-2">
@@ -606,6 +659,119 @@ function TaskDetailPanel({
             등록
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+type TaskFile = { id: string; file_name: string; file_path: string; uploaded_by: string };
+
+function FileAttachments({
+  taskId,
+  userId,
+  supabase,
+}: {
+  taskId: string;
+  userId: string;
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const [files, setFiles] = useState<TaskFile[]>([]);
+  const [links, setLinks] = useState<Map<string, string>>(new Map());
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("work_task_files")
+      .select("id, file_name, file_path, uploaded_by")
+      .eq("task_id", taskId)
+      .order("created_at", { ascending: true });
+    const rows = data ?? [];
+    setFiles(rows);
+
+    const entries = await Promise.all(
+      rows.map(async (f) => {
+        const { data: signed } = await supabase.storage.from("work-tasks").createSignedUrl(f.file_path, 3600);
+        return [f.id, signed?.signedUrl ?? null] as const;
+      }),
+    );
+    setLinks(new Map(entries.filter(([, url]) => !!url) as [string, string][]));
+  }, [supabase, taskId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleUpload() {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const path = `${taskId}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("work-tasks").upload(path, file);
+    if (!uploadError) {
+      await supabase.from("work_task_files").insert({
+        task_id: taskId,
+        uploaded_by: userId,
+        file_name: file.name,
+        file_path: path,
+      });
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    load();
+  }
+
+  async function handleDelete(fileId: string, filePath: string) {
+    await supabase.storage.from("work-tasks").remove([filePath]);
+    await supabase.from("work_task_files").delete().eq("id", fileId);
+    load();
+  }
+
+  return (
+    <div className="mt-4">
+      <p className="text-xs font-bold text-brand-700">첨부파일</p>
+      {files.length === 0 ? (
+        <p className="mt-1 text-xs text-brand-300">첨부된 파일이 없어요.</p>
+      ) : (
+        <ul className="mt-1 space-y-1">
+          {files.map((f) => (
+            <li
+              key={f.id}
+              className="flex items-center justify-between gap-2 rounded-lg bg-brand-50 px-2.5 py-1.5 text-xs"
+            >
+              {links.get(f.id) ? (
+                <a
+                  href={links.get(f.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="truncate font-semibold text-accent-700 hover:underline"
+                >
+                  {f.file_name}
+                </a>
+              ) : (
+                <span className="truncate text-brand-500">{f.file_name}</span>
+              )}
+              {f.uploaded_by === userId && (
+                <button
+                  onClick={() => handleDelete(f.id, f.file_path)}
+                  className="shrink-0 text-brand-300 hover:text-red-600"
+                >
+                  삭제
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-2 flex items-center gap-2">
+        <input ref={fileInputRef} type="file" className="min-w-0 flex-1 text-xs" />
+        <button
+          onClick={handleUpload}
+          disabled={uploading}
+          className="shrink-0 rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-200 disabled:opacity-60"
+        >
+          {uploading ? "업로드 중..." : "업로드"}
+        </button>
       </div>
     </div>
   );

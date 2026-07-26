@@ -101,18 +101,15 @@ export default function NotificationBell() {
     }
 
     if (isOfficer && profileData) {
-      const soonKey = toDateKey(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
-      const { data: dueTasks } = await supabase
+      const { count: taskCount } = await supabase
         .from("work_tasks")
-        .select("id")
+        .select("id", { count: "exact", head: true })
         .eq("department", profileData.department)
-        .neq("status", "done")
-        .not("due_date", "is", null)
-        .lte("due_date", soonKey);
-      if ((dueTasks?.length ?? 0) > 0) {
+        .neq("status", "done");
+      if ((taskCount ?? 0) > 0) {
         results.push({
           type: "tasks",
-          message: `임박한 업무가 ${dueTasks!.length}건 있어요`,
+          message: `처리할 업무가 ${taskCount}건 있어요`,
           href: "/admin/tasks",
         });
       }
