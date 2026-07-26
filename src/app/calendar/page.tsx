@@ -4,23 +4,27 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { EVENT_CATEGORIES, categoryLabel, categoryColor } from "@/lib/eventCategories";
+import { EVENT_CATEGORIES, categoryMeta, categoryLabel, categoryColor } from "@/lib/eventCategories";
 import { BAKING_PLACE } from "@/lib/bakingPlace";
 
-// 스튜디오 예약이 필요한 활동 종류 (직접 만나서 굽는 활동)
-const STUDIO_REQUIRED_CATEGORIES = ["free", "regular", "team_mission", "monthly_special"];
+// 스튜디오 예약이 필요한 활동 종류 (직접 스튜디오에서 굽는 활동)
+const STUDIO_REQUIRED_CATEGORIES = ["free", "regular", "monthly_special"];
 
 type EventRow = {
   id: string;
   category: string;
   event_date: string;
-  start_time: string;
-  end_time: string;
+  end_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
   location: string;
-  items: string;
-  capacity: number;
-  price_range: string;
-  signup_open_at: string;
+  location_2: string | null;
+  items: string | null;
+  capacity: number | null;
+  price_range: string | null;
+  signup_open_at: string | null;
+  google_form_url: string | null;
+  signup_method: "in_app_auto" | "manual" | "none";
   status: "pending" | "approved" | "rejected";
   created_by: string;
 };
@@ -36,6 +40,29 @@ function formatOpenAt(iso: string): string {
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
   return `${d.getMonth() + 1}월 ${d.getDate()}일 ${hh}시 ${mm}분부터 참여 신청 가능합니다.`;
+}
+
+function formatDateRange(e: EventRow): string {
+  if (e.end_date && e.end_date !== e.event_date) return `${e.event_date} ~ ${e.end_date}`;
+  return e.event_date;
+}
+
+function formatTimeRange(e: EventRow): string {
+  if (!e.start_time) return "";
+  if (!e.end_time) return e.start_time;
+  return `${e.start_time}~${e.end_time}`;
+}
+
+function expandDateKeys(start: string, end: string | null): string[] {
+  if (!end || end <= start) return [start];
+  const keys: string[] = [];
+  const cur = new Date(start + "T00:00:00");
+  const last = new Date(end + "T00:00:00");
+  while (cur <= last) {
+    keys.push(toDateKey(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return keys;
 }
 
 function buildMonthGrid(monthDate: Date): Date[] {
@@ -88,15 +115,16 @@ export default function CalendarPage() {
     const { data } = await supabase
       .from("events")
       .select(
-        "id, category, event_date, start_time, end_time, location, items, capacity, price_range, signup_open_at, status, created_by",
+        "id, category, event_date, end_date, start_time, end_time, location, location_2, items, capacity, price_range, signup_open_at, google_form_url, signup_method, status, created_by",
       )
       .order("event_date", { ascending: true });
 
     const rows = (data as unknown as EventRow[]) ?? [];
     setEvents(rows);
 
+    const autoRows = rows.filter((e) => e.signup_method === "in_app_auto");
     const remainingEntries = await Promise.all(
-      rows.map(async (e) => {
+      autoRows.map(async (e) => {
         const { data: count } = await supabase.rpc("event_remaining_spots", { p_event_id: e.id });
         return [e.id, count ?? 0] as const;
       }),
@@ -128,7 +156,9 @@ export default function CalendarPage() {
     const map: Record<string, EventRow[]> = {};
     for (const e of events) {
       if (e.status !== "approved" && !isOfficer) continue;
-      (map[e.event_date] ??= []).push(e);
+      for (const key of expandDateKeys(e.event_date, e.end_date)) {
+        (map[key] ??= []).push(e);
+      }
     }
     return map;
   }, [events, isOfficer]);
@@ -136,7 +166,7 @@ export default function CalendarPage() {
   const upcoming = useMemo(() => {
     const todayKey = toDateKey(new Date());
     return events
-      .filter((e) => e.status === "approved" && e.event_date >= todayKey)
+      .filter((e) => e.status === "approved" && (e.end_date ?? e.event_date) >= todayKey)
       .sort((a, b) => a.event_date.localeCompare(b.event_date))
       .slice(0, 5);
   }, [events]);
@@ -172,8 +202,17 @@ export default function CalendarPage() {
   const signupEvents = useMemo(
     () =>
       events
-        .filter((e) => e.status === "approved" && e.event_date >= todayKey)
-        .sort((a, b) => a.event_date.localeCompare(b.event_date) || a.signup_open_at.localeCompare(b.signup_open_at)),
+        .filter(
+          (e) =>
+            e.status === "approved" &&
+            e.signup_method === "in_app_auto" &&
+            (e.end_date ?? e.event_date) >= todayKey,
+        )
+        .sort(
+          (a, b) =>
+            a.event_date.localeCompare(b.event_date) ||
+            (a.signup_open_at ?? "").localeCompare(b.signup_open_at ?? ""),
+        ),
     [events, todayKey],
   );
 
@@ -195,8 +234,8 @@ export default function CalendarPage() {
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-50 px-3 py-2 text-sm"
               >
                 <span>
-                  {e.event_date} {e.start_time}~{e.end_time} · {categoryLabel(e.category)} · {e.items} ·{" "}
-                  {e.location}
+                  {formatDateRange(e)} {formatTimeRange(e)} · {categoryLabel(e.category)}
+                  {e.items ? ` · ${e.items}` : ""} · {e.location}
                 </span>
                 <div className="flex gap-2">
                   <button
@@ -288,7 +327,8 @@ export default function CalendarPage() {
                     className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
                     style={{ backgroundColor: categoryColor(e.category) }}
                   />
-                  {e.event_date} · {categoryLabel(e.category)} · {e.items}
+                  {formatDateRange(e)} · {categoryLabel(e.category)}
+                  {e.items ? ` · ${e.items}` : ""}
                 </li>
               ))}
             </ul>
@@ -301,9 +341,10 @@ export default function CalendarPage() {
             )}
             <div className="space-y-4">
               {selectedEvents.map((e) => {
+                const meta = categoryMeta(e.category);
                 const joined = myParticipations.has(e.id);
                 const spots = remaining[e.id] ?? 0;
-                const opensSoon = new Date(e.signup_open_at) > new Date();
+                const opensSoon = e.signup_open_at ? new Date(e.signup_open_at) > new Date() : false;
                 return (
                   <div key={e.id} className="rounded-lg border border-brand-100 p-3">
                     <div className="flex items-center gap-2">
@@ -321,40 +362,69 @@ export default function CalendarPage() {
                     <p className="mt-1 text-xs text-brand-500">
                       주최자: {(hostNames[e.id] ?? []).join(", ") || "-"}
                     </p>
-                    <p className="text-xs text-brand-500">장소: {e.location}</p>
+                    <p className="text-xs text-brand-500">기간: {formatDateRange(e)}</p>
+                    {formatTimeRange(e) && (
+                      <p className="text-xs text-brand-500">시간: {formatTimeRange(e)}</p>
+                    )}
                     <p className="text-xs text-brand-500">
-                      시간: {e.start_time}~{e.end_time}
+                      장소: {e.location}
+                      {e.location_2 ? ` / ${e.location_2}` : ""}
                     </p>
-                    <p className="text-xs text-brand-500">품목: {e.items}</p>
-                    <p className="text-xs text-brand-500">예상 가격대: {e.price_range}</p>
-                    <p className="mt-1 text-xs font-semibold text-accent-700">
-                      정원 {e.capacity}명 · 잔여 {Math.max(spots, 0)}자리
-                    </p>
+                    {meta.needsItems && e.items && (
+                      <p className="text-xs text-brand-500">
+                        {meta.itemsLabel}: {e.items}
+                      </p>
+                    )}
+                    {meta.needsPrice && e.price_range && (
+                      <p className="text-xs text-brand-500">예상 가격대: {e.price_range}</p>
+                    )}
 
-                    {e.status === "approved" && userId && (
-                      <div className="mt-2">
-                        {joined ? (
-                          <button
-                            onClick={() => handleCancel(e.id)}
-                            className="rounded-full bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-red-50 hover:text-red-600"
-                          >
-                            참여 취소
-                          </button>
-                        ) : opensSoon ? (
-                          <p className="text-xs text-brand-300">
-                            {new Date(e.signup_open_at).toLocaleString("ko-KR")}부터 신청 가능
-                          </p>
-                        ) : spots <= 0 ? (
-                          <p className="text-xs text-red-500">마감되었습니다</p>
-                        ) : (
-                          <button
-                            onClick={() => handleJoin(e.id)}
-                            className="rounded-full bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700"
-                          >
-                            참여 신청
-                          </button>
+                    {meta.signup === "in_app_auto" && (
+                      <>
+                        <p className="mt-1 text-xs font-semibold text-accent-700">
+                          정원 {e.capacity}명 · 잔여 {Math.max(spots, 0)}자리
+                        </p>
+                        {e.status === "approved" && userId && (
+                          <div className="mt-2">
+                            {joined ? (
+                              <button
+                                onClick={() => handleCancel(e.id)}
+                                className="rounded-full bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-red-50 hover:text-red-600"
+                              >
+                                참여 취소
+                              </button>
+                            ) : opensSoon ? (
+                              <p className="text-xs text-brand-300">
+                                {new Date(e.signup_open_at!).toLocaleString("ko-KR")}부터 신청 가능
+                              </p>
+                            ) : spots <= 0 ? (
+                              <p className="text-xs text-red-500">마감되었습니다</p>
+                            ) : (
+                              <button
+                                onClick={() => handleJoin(e.id)}
+                                className="rounded-full bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700"
+                              >
+                                참여 신청
+                              </button>
+                            )}
+                          </div>
                         )}
-                      </div>
+                      </>
+                    )}
+
+                    {meta.needsGoogleForm && e.google_form_url && (
+                      <a
+                        href={e.google_form_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-block rounded-full bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700"
+                      >
+                        구글폼으로 신청하기
+                      </a>
+                    )}
+
+                    {isOfficer && meta.signup === "manual" && (
+                      <ManualParticipants eventId={e.id} supabase={supabase} />
                     )}
                   </div>
                 );
@@ -402,7 +472,7 @@ export default function CalendarPage() {
         )}
         <ul className="space-y-3">
           {signupEvents.map((e) => {
-            const isOpen = new Date(e.signup_open_at) <= new Date();
+            const isOpen = e.signup_open_at ? new Date(e.signup_open_at) <= new Date() : false;
             const spots = remaining[e.id] ?? 0;
             const joined = myParticipations.has(e.id);
             return (
@@ -415,9 +485,10 @@ export default function CalendarPage() {
                     className="mr-1 inline-block h-2 w-2 rounded-full align-middle"
                     style={{ backgroundColor: categoryColor(e.category) }}
                   />
-                  {e.event_date} · {categoryLabel(e.category)} · {e.items} · 잔여 {Math.max(spots, 0)}자리
+                  {e.event_date} · {categoryLabel(e.category)}
+                  {e.items ? ` · ${e.items}` : ""} · 잔여 {Math.max(spots, 0)}자리
                   {!isOpen && (
-                    <div className="mt-1 text-brand-300">{formatOpenAt(e.signup_open_at)}</div>
+                    <div className="mt-1 text-brand-300">{formatOpenAt(e.signup_open_at!)}</div>
                   )}
                 </div>
 
@@ -457,6 +528,122 @@ export default function CalendarPage() {
   );
 }
 
+function ManualParticipants({
+  eventId,
+  supabase,
+}: {
+  eventId: string;
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const [participants, setParticipants] = useState<
+    { profile_id: string; name: string; student_id: string }[]
+  >([]);
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<{ id: string; name: string; student_id: string } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const { data } = await supabase
+      .from("event_participants")
+      .select("profile_id, profiles(name, student_id)")
+      .eq("event_id", eventId);
+    setParticipants(
+      ((data as unknown as { profile_id: string; profiles: { name: string; student_id: string } | null }[]) ?? []).map(
+        (r) => ({ profile_id: r.profile_id, name: r.profiles?.name ?? "-", student_id: r.profiles?.student_id ?? "-" }),
+      ),
+    );
+  }, [supabase, eventId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleSearch() {
+    setMessage(null);
+    setFound(null);
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, name, student_id")
+      .or(`student_id.eq.${query.trim()},username.eq.${query.trim()}`)
+      .limit(1)
+      .maybeSingle();
+    if (!data) {
+      setMessage("일치하는 회원을 찾을 수 없습니다.");
+      return;
+    }
+    setFound(data);
+  }
+
+  async function handleAdd() {
+    if (!found) return;
+    const { error } = await supabase.rpc("admin_add_participant", {
+      p_event_id: eventId,
+      p_profile_id: found.id,
+    });
+    if (error) {
+      setMessage("등록에 실패했습니다.");
+      return;
+    }
+    setQuery("");
+    setFound(null);
+    load();
+  }
+
+  async function handleRemove(profileId: string) {
+    await supabase.rpc("admin_remove_participant", { p_event_id: eventId, p_profile_id: profileId });
+    load();
+  }
+
+  return (
+    <div className="mt-3 rounded-lg bg-brand-50 p-3">
+      <p className="text-xs font-bold text-brand-700">참여자 수동 등록 (임원진)</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="학번 또는 아이디"
+          className="rounded-lg border border-brand-100 px-2 py-1 text-xs"
+        />
+        <button
+          onClick={handleSearch}
+          className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100/70"
+        >
+          검색
+        </button>
+        {found && (
+          <>
+            <span className="text-xs text-brand-700">{found.name} ({found.student_id})</span>
+            <button
+              onClick={handleAdd}
+              className="rounded-full bg-accent-500 px-3 py-1 text-xs font-semibold text-white hover:bg-accent-700"
+            >
+              추가
+            </button>
+          </>
+        )}
+      </div>
+      {message && <p className="mt-1 text-xs text-red-500">{message}</p>}
+
+      <ul className="mt-2 space-y-1">
+        {participants.map((p) => (
+          <li key={p.profile_id} className="flex items-center justify-between text-xs text-brand-700">
+            <span>
+              {p.name} ({p.student_id})
+            </span>
+            <button
+              onClick={() => handleRemove(p.profile_id)}
+              className="text-brand-300 hover:text-red-600"
+            >
+              삭제
+            </button>
+          </li>
+        ))}
+        {participants.length === 0 && <li className="text-xs text-brand-300">등록된 참여자가 없어요.</li>}
+      </ul>
+    </div>
+  );
+}
+
 function RegisterForm({
   isOfficer,
   onClose,
@@ -468,15 +655,20 @@ function RegisterForm({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [category, setCategory] = useState<string>(EVENT_CATEGORIES[1].value);
+  const meta = categoryMeta(category);
+
   const [eventDate, setEventDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
+  const [location2, setLocation2] = useState("");
   const [items, setItems] = useState("");
   const [capacity, setCapacity] = useState("6");
   const [priceRange, setPriceRange] = useState("");
   const [signupOpenDate, setSignupOpenDate] = useState("");
   const [signupOpenTime, setSignupOpenTime] = useState("");
+  const [googleFormUrl, setGoogleFormUrl] = useState("");
   const [studioConfirmed, setStudioConfirmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -491,9 +683,12 @@ function RegisterForm({
       setError("베이킹 스튜디오 예약 여부를 먼저 확인해주세요.");
       return;
     }
-
-    if (endTime <= startTime) {
+    if (meta.timeMode === "range" && endTime && endTime <= startTime) {
       setError("종료 시간은 시작 시간보다 늦어야 합니다.");
+      return;
+    }
+    if (meta.dateMode === "range" && endDate && endDate < eventDate) {
+      setError("종료 날짜는 시작 날짜보다 늦어야 합니다.");
       return;
     }
 
@@ -509,13 +704,20 @@ function RegisterForm({
       .insert({
         category,
         event_date: eventDate,
-        start_time: startTime,
-        end_time: endTime,
+        end_date: meta.dateMode === "range" ? endDate : null,
+        start_time: meta.timeMode === "none" ? null : startTime,
+        end_time: meta.timeMode === "range" ? endTime : null,
         location,
-        items,
-        capacity: Number(capacity),
-        price_range: priceRange,
-        signup_open_at: new Date(`${signupOpenDate}T${signupOpenTime}`).toISOString(),
+        location_2: meta.location === "double" ? location2 : null,
+        items: meta.needsItems ? items : null,
+        price_range: meta.needsPrice ? priceRange : null,
+        capacity: meta.signup === "in_app_auto" ? Number(capacity) : null,
+        signup_open_at:
+          meta.signup === "in_app_auto"
+            ? new Date(`${signupOpenDate}T${signupOpenTime}`).toISOString()
+            : null,
+        google_form_url: meta.needsGoogleForm ? googleFormUrl : null,
+        signup_method: meta.signup,
         created_by: userData.user.id,
       })
       .select("id")
@@ -523,7 +725,8 @@ function RegisterForm({
 
     if (insertError || !created) {
       setLoading(false);
-      setError("일정 등록에 실패했습니다.");
+      console.error("insertError", insertError);
+      setError("일정 등록에 실패했습니다: " + (insertError?.message ?? "unknown"));
       return;
     }
 
@@ -554,7 +757,7 @@ function RegisterForm({
           </select>
         ) : (
           <p className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-sm text-brand-500">
-            자유주최 (일반 회원은 자유주최만 등록할 수 있어요)
+            자유주최
           </p>
         )}
       </label>
@@ -588,7 +791,9 @@ function RegisterForm({
       )}
 
       <label className="block text-sm sm:col-span-2">
-        <span className="mb-1 block font-medium text-brand-700">날짜</span>
+        <span className="mb-1 block font-medium text-brand-700">
+          {meta.dateMode === "range" ? "시작 날짜" : "날짜"}
+        </span>
         <input
           type="date"
           value={eventDate}
@@ -597,16 +802,36 @@ function RegisterForm({
           className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
         />
       </label>
+      {meta.dateMode === "range" && (
+        <label className="block text-sm sm:col-span-2">
+          <span className="mb-1 block font-medium text-brand-700">종료 날짜</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            required
+            className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+          />
+        </label>
+      )}
+
+      {meta.timeMode !== "none" && (
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-brand-700">시작 시간</span>
+          <TimeSelect value={startTime} onChange={setStartTime} />
+        </label>
+      )}
+      {meta.timeMode === "range" && (
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-brand-700">종료 시간</span>
+          <TimeSelect value={endTime} onChange={setEndTime} />
+        </label>
+      )}
+
       <label className="block text-sm">
-        <span className="mb-1 block font-medium text-brand-700">시작 시간</span>
-        <TimeSelect value={startTime} onChange={setStartTime} />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-brand-700">종료 시간</span>
-        <TimeSelect value={endTime} onChange={setEndTime} />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-brand-700">장소</span>
+        <span className="mb-1 block font-medium text-brand-700">
+          {meta.location === "double" ? "장소 1" : "장소"}
+        </span>
         <input
           value={location}
           onChange={(e) => setLocation(e.target.value)}
@@ -614,48 +839,84 @@ function RegisterForm({
           className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
         />
       </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-brand-700">정원</span>
-        <input
-          type="number"
-          min={1}
-          value={capacity}
-          onChange={(e) => setCapacity(e.target.value)}
-          required
-          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-brand-700">베이킹 품목</span>
-        <input
-          value={items}
-          onChange={(e) => setItems(e.target.value)}
-          required
-          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium text-brand-700">예상 가격대</span>
-        <input
-          value={priceRange}
-          onChange={(e) => setPriceRange(e.target.value)}
-          required
-          className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
-        />
-      </label>
-      <label className="block text-sm sm:col-span-2">
-        <span className="mb-1 block font-medium text-brand-700">신청 오픈 일시</span>
-        <div className="flex flex-wrap gap-2">
+      {meta.location === "double" && (
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-brand-700">장소 2</span>
           <input
-            type="date"
-            value={signupOpenDate}
-            onChange={(e) => setSignupOpenDate(e.target.value)}
+            value={location2}
+            onChange={(e) => setLocation2(e.target.value)}
             required
-            className="rounded-lg border border-brand-100 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
           />
-          <TimeSelect value={signupOpenTime} onChange={setSignupOpenTime} />
-        </div>
-      </label>
+        </label>
+      )}
+
+      {meta.signup === "in_app_auto" && (
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-brand-700">정원</span>
+          <input
+            type="number"
+            min={1}
+            value={capacity}
+            onChange={(e) => setCapacity(e.target.value)}
+            required
+            className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+          />
+        </label>
+      )}
+
+      {meta.needsItems && (
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-brand-700">{meta.itemsLabel}</span>
+          <input
+            value={items}
+            onChange={(e) => setItems(e.target.value)}
+            required
+            className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+          />
+        </label>
+      )}
+      {meta.needsPrice && (
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-brand-700">예상 가격대</span>
+          <input
+            value={priceRange}
+            onChange={(e) => setPriceRange(e.target.value)}
+            required
+            className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+          />
+        </label>
+      )}
+
+      {meta.signup === "in_app_auto" && (
+        <label className="block text-sm sm:col-span-2">
+          <span className="mb-1 block font-medium text-brand-700">신청 오픈 일시</span>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="date"
+              value={signupOpenDate}
+              onChange={(e) => setSignupOpenDate(e.target.value)}
+              required
+              className="rounded-lg border border-brand-100 px-3 py-2 text-sm"
+            />
+            <TimeSelect value={signupOpenTime} onChange={setSignupOpenTime} />
+          </div>
+        </label>
+      )}
+
+      {meta.needsGoogleForm && (
+        <label className="block text-sm sm:col-span-2">
+          <span className="mb-1 block font-medium text-brand-700">신청 방법 (구글폼 링크)</span>
+          <input
+            type="url"
+            value={googleFormUrl}
+            onChange={(e) => setGoogleFormUrl(e.target.value)}
+            placeholder="https://forms.gle/..."
+            required
+            className="w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+          />
+        </label>
+      )}
 
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 sm:col-span-2">{error}</p>
