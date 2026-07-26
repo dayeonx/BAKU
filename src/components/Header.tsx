@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { departmentLabel } from "@/lib/departments";
 import LogoutButton from "./LogoutButton";
+import AdminMenu from "./AdminMenu";
 
 const NAV_LINKS = [
   { href: "/", label: "메인 홈" },
@@ -18,13 +19,15 @@ export default async function Header() {
   } = await supabase.auth.getUser();
 
   let profile: { name: string; department: string } | null = null;
+  let isOfficer = false;
   if (user) {
     const { data } = await supabase
       .from("profiles")
-      .select("name, department")
+      .select("name, department, status")
       .eq("id", user.id)
       .single();
     profile = data;
+    isOfficer = !!data && data.department !== "member" && data.status === "active";
   }
 
   return (
@@ -49,6 +52,7 @@ export default async function Header() {
               {link.label}
             </Link>
           ))}
+          {isOfficer && <AdminMenu />}
         </nav>
 
         {profile ? (
