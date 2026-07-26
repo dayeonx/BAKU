@@ -159,6 +159,8 @@ export default function GuidePage() {
         <h2 className="text-xl font-bold text-brand-700">FAQ</h2>
         <div className="mt-4 rounded-2xl border border-brand-100 bg-white p-6 text-center text-sm text-brand-300">
           아직 준비 중이에요. 곧 자주 묻는 질문들을 정리해서 채워둘게요.
+          <br />
+          더 궁금한 점은 하단의 카카오톡 채널로 문의하시면 실시간으로 답변드려요.
         </div>
       </section>
     </div>

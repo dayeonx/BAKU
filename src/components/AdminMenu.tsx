@@ -5,8 +5,10 @@ import { useEffect, useRef, useState } from "react";
 
 const ADMIN_LINKS = [
   { href: "/admin/members", label: "회원 관리" },
+  { href: "/admin/events", label: "행사 관리" },
   { href: "/admin/participants", label: "참여자 명단 등록" },
   { href: "/admin/settlements", label: "정산 관리" },
+  { href: "/admin/tasks", label: "업무 관리" },
 ];
 
 export default function AdminMenu() {

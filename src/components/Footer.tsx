@@ -1,6 +1,7 @@
-// TODO: Notion / Instagram 링크가 정해지면 아래 두 값만 채우면 됩니다.
+// TODO: Notion / Instagram / 카카오톡 채널 링크가 정해지면 아래 값만 채우면 됩니다.
 const NOTION_URL = "#";
 const INSTAGRAM_URL = "#";
+const KAKAO_CHANNEL_URL = "#";
 
 export default function Footer() {
   return (
@@ -25,7 +26,19 @@ export default function Footer() {
           >
             <InstagramIcon />
           </a>
+          <a
+            href={KAKAO_CHANNEL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="카카오톡 채널"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-brand-700 transition-colors hover:bg-accent-100 hover:text-accent-700"
+          >
+            <KakaoIcon />
+          </a>
         </div>
+        <p className="text-xs text-brand-500">
+          문의사항은 카카오톡 채널로 실시간 답변을 받아보실 수 있어요.
+        </p>
         <p className="text-xs text-brand-500">
           © {new Date().getFullYear()} BAKU — 고려대학교 중앙동아리
         </p>
@@ -62,6 +75,14 @@ function InstagramIcon() {
       <rect x="3" y="3" width="18" height="18" rx="5" />
       <circle cx="12" cy="12" r="4" />
       <circle cx="17.2" cy="6.8" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function KakaoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+      <path d="M12 3.5C6.75 3.5 2.5 6.86 2.5 11c0 2.64 1.73 4.96 4.34 6.3-.19.68-.69 2.48-.79 2.87 0 0-.02.18.1.25.12.07.26.02.26.02.34-.05 2.6-1.73 3.65-2.42.63.09 1.28.14 1.94.14 5.25 0 9.5-3.36 9.5-7.16S17.25 3.5 12 3.5z" />
     </svg>
   );
 }
