@@ -538,9 +538,6 @@ function ManualParticipants({
   const [participants, setParticipants] = useState<
     { profile_id: string; name: string; student_id: string }[]
   >([]);
-  const [query, setQuery] = useState("");
-  const [found, setFound] = useState<{ id: string; name: string; student_id: string } | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -558,37 +555,6 @@ function ManualParticipants({
     load();
   }, [load]);
 
-  async function handleSearch() {
-    setMessage(null);
-    setFound(null);
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, name, student_id")
-      .or(`student_id.eq.${query.trim()},username.eq.${query.trim()}`)
-      .limit(1)
-      .maybeSingle();
-    if (!data) {
-      setMessage("일치하는 회원을 찾을 수 없습니다.");
-      return;
-    }
-    setFound(data);
-  }
-
-  async function handleAdd() {
-    if (!found) return;
-    const { error } = await supabase.rpc("admin_add_participant", {
-      p_event_id: eventId,
-      p_profile_id: found.id,
-    });
-    if (error) {
-      setMessage("등록에 실패했습니다.");
-      return;
-    }
-    setQuery("");
-    setFound(null);
-    load();
-  }
-
   async function handleRemove(profileId: string) {
     await supabase.rpc("admin_remove_participant", { p_event_id: eventId, p_profile_id: profileId });
     load();
@@ -596,33 +562,12 @@ function ManualParticipants({
 
   return (
     <div className="mt-3 rounded-lg bg-brand-50 p-3">
-      <p className="text-xs font-bold text-brand-700">참여자 수동 등록 (임원진)</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="학번 또는 아이디"
-          className="rounded-lg border border-brand-100 px-2 py-1 text-xs"
-        />
-        <button
-          onClick={handleSearch}
-          className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100/70"
-        >
-          검색
-        </button>
-        {found && (
-          <>
-            <span className="text-xs text-brand-700">{found.name} ({found.student_id})</span>
-            <button
-              onClick={handleAdd}
-              className="rounded-full bg-accent-500 px-3 py-1 text-xs font-semibold text-white hover:bg-accent-700"
-            >
-              추가
-            </button>
-          </>
-        )}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-brand-700">참여자 명단</p>
+        <Link href="/admin/participants" className="text-xs font-semibold text-accent-700 hover:underline">
+          엑셀로 명단 등록하기 →
+        </Link>
       </div>
-      {message && <p className="mt-1 text-xs text-red-500">{message}</p>}
 
       <ul className="mt-2 space-y-1">
         {participants.map((p) => (
