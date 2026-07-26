@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { categoryLabel } from "@/lib/eventCategories";
 import { semesterLabel, currentSemesterLabel } from "@/lib/semester";
@@ -62,6 +62,8 @@ export default function AlbumPage() {
   const [events, setEvents] = useState<AlbumEvent[]>([]);
   const [selectedSemester, setSelectedSemester] = useState<string | null>(null);
   const [showRanking, setShowRanking] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const archiveRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     (async () => {
@@ -87,6 +89,22 @@ export default function AlbumPage() {
     set.add(currentSemesterLabel());
     return Array.from(set).sort().reverse();
   }, [events]);
+
+  const pastSemesters = useMemo(
+    () => semesters.filter((s) => s !== currentSemesterLabel()),
+    [semesters],
+  );
+  const isViewingCurrent = selectedSemester === currentSemesterLabel();
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (archiveRef.current && !archiveRef.current.contains(e.target as Node)) {
+        setArchiveOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const eventsInSemester = useMemo(
     () => events.filter((e) => semesterLabel(e.event_date) === selectedSemester),
@@ -149,18 +167,48 @@ export default function AlbumPage() {
       <h1 className="text-2xl font-extrabold text-brand-700">앨범</h1>
       <p className="mt-2 text-sm text-brand-500">종료된 동아리 활동의 기록과 후기를 모아볼 수 있어요.</p>
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        {semesters.map((s) => (
+      <div className="mt-6 flex items-center gap-3">
+        <h2 className="text-lg font-bold text-brand-700">
+          {isViewingCurrent ? "이번 학기" : selectedSemester}
+        </h2>
+        {!isViewingCurrent && (
           <button
-            key={s}
-            onClick={() => setSelectedSemester(s)}
-            className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-              selectedSemester === s ? "bg-accent-500 text-white" : "bg-white text-brand-500 hover:bg-brand-50"
-            }`}
+            onClick={() => setSelectedSemester(currentSemesterLabel())}
+            className="text-xs font-semibold text-accent-700 hover:underline"
           >
-            {s === currentSemesterLabel() ? `${s} (이번 학기)` : s}
+            이번 학기로 돌아가기
           </button>
-        ))}
+        )}
+        <div ref={archiveRef} className="relative ml-auto">
+          <button
+            onClick={() => setArchiveOpen((v) => !v)}
+            className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
+          >
+            지난 학기 아카이브 {archiveOpen ? "▲" : "▼"}
+          </button>
+          {archiveOpen && (
+            <div className="absolute right-0 top-full z-10 mt-2 w-44 overflow-hidden rounded-xl border border-brand-100 bg-white shadow-lg">
+              {pastSemesters.length === 0 ? (
+                <p className="px-4 py-2.5 text-xs text-brand-300">지난 학기 기록이 없어요.</p>
+              ) : (
+                pastSemesters.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setSelectedSemester(s);
+                      setArchiveOpen(false);
+                    }}
+                    className={`block w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-brand-50 ${
+                      selectedSemester === s ? "font-semibold text-accent-700" : "text-brand-700"
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-brand-100 bg-white px-4 py-3 text-sm text-brand-700">
@@ -169,7 +217,7 @@ export default function AlbumPage() {
         </span>
         <span className="text-brand-200">|</span>
         <span>
-          평균 가격(추정) <strong>{stats.avgPrice !== null ? `${stats.avgPrice.toLocaleString()}원` : "-"}</strong>
+          평균 가격 <strong>{stats.avgPrice !== null ? `약 ${stats.avgPrice.toLocaleString()}원` : "-"}</strong>
         </span>
         <span className="text-brand-200">|</span>
         <span>
