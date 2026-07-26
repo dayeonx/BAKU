@@ -12,6 +12,7 @@ type Profile = {
   name: string;
   student_id: string;
   department: string;
+  status: string;
   college: string | null;
   major: string | null;
 };
@@ -25,6 +26,7 @@ type EventLite = {
   end_time: string | null;
   location: string;
   items: string | null;
+  status: string;
 };
 
 type MyEvent = EventLite & { isHost: boolean; isParticipant: boolean };
@@ -75,7 +77,7 @@ export default function MyPage() {
 
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("name, student_id, department, college, major")
+      .select("name, student_id, department, status, college, major")
       .eq("id", uid)
       .single();
     setProfile(profileData);
@@ -83,20 +85,21 @@ export default function MyPage() {
     const [{ data: participantRows }, { data: hostedRows }] = await Promise.all([
       supabase
         .from("event_participants")
-        .select("events(id, category, event_date, end_date, start_time, end_time, location, items)")
+        .select("events(id, category, event_date, end_date, start_time, end_time, location, items, status)")
         .eq("profile_id", uid),
       supabase
         .from("events")
-        .select("id, category, event_date, end_date, start_time, end_time, location, items")
+        .select("id, category, event_date, end_date, start_time, end_time, location, items, status")
         .eq("created_by", uid),
     ]);
 
     const merged = new Map<string, MyEvent>();
     for (const row of (participantRows as unknown as { events: EventLite | null }[]) ?? []) {
-      if (!row.events) continue;
+      if (!row.events || row.events.status !== "approved") continue;
       merged.set(row.events.id, { ...row.events, isHost: false, isParticipant: true });
     }
     for (const e of (hostedRows as EventLite[]) ?? []) {
+      if (e.status !== "approved") continue;
       const prev = merged.get(e.id);
       merged.set(e.id, { ...e, isHost: true, isParticipant: prev?.isParticipant ?? false });
     }

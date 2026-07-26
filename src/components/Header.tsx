@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { departmentLabel } from "@/lib/departments";
 import LogoutButton from "./LogoutButton";
 import AdminMenu from "./AdminMenu";
+import NotificationBell from "./NotificationBell";
 
 const NAV_LINKS = [
   { href: "/", label: "메인 홈" },
@@ -63,6 +64,7 @@ export default async function Header() {
                 {departmentLabel(profile.department)}
               </span>
             </span>
+            <NotificationBell />
             <LogoutButton />
           </div>
         ) : (
