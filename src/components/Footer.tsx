@@ -37,9 +37,6 @@ export default function Footer() {
           </a>
         </div>
         <p className="text-xs text-brand-500">
-          문의사항은 카카오톡 채널로 실시간 답변을 받아보실 수 있어요.
-        </p>
-        <p className="text-xs text-brand-500">
           © {new Date().getFullYear()} BAKU — 고려대학교 중앙동아리
         </p>
       </div>

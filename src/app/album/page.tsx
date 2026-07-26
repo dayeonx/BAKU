@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { categoryLabel } from "@/lib/eventCategories";
-import { semesterLabel, currentSemesterLabel } from "@/lib/semester";
+import { semesterLabel, currentSemesterLabel, semesterDateRange } from "@/lib/semester";
 
 const BAKING_CATEGORIES = ["regular", "free", "monthly_special"];
 
@@ -64,6 +64,8 @@ export default function AlbumPage() {
   const [showRanking, setShowRanking] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const archiveRef = useRef<HTMLDivElement>(null);
+  const [topHost, setTopHost] = useState<{ username: string; count: number } | null>(null);
+  const [topParticipant, setTopParticipant] = useState<{ username: string; count: number } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -110,6 +112,23 @@ export default function AlbumPage() {
     () => events.filter((e) => semesterLabel(e.event_date) === selectedSemester),
     [events, selectedSemester],
   );
+
+  useEffect(() => {
+    if (!selectedSemester) return;
+    (async () => {
+      const { start, endExclusive } = semesterDateRange(selectedSemester);
+      const [{ data: hostRow }, { data: participantRow }] = await Promise.all([
+        supabase.rpc("album_top_host", { p_start: start, p_end_exclusive: endExclusive }),
+        supabase.rpc("album_top_participant", { p_start: start, p_end_exclusive: endExclusive }),
+      ]);
+      const host = hostRow?.[0];
+      const participant = participantRow?.[0];
+      setTopHost(host ? { username: host.username, count: host.host_count } : null);
+      setTopParticipant(
+        participant ? { username: participant.username, count: participant.participation_count } : null,
+      );
+    })();
+  }, [selectedSemester, supabase]);
 
   const bakingEvents = useMemo(
     () => eventsInSemester.filter((e) => BAKING_CATEGORIES.includes(e.category)),
@@ -241,6 +260,19 @@ export default function AlbumPage() {
         </div>
       )}
 
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <TopMemberCard
+          title={`${isViewingCurrent ? "이번학기" : selectedSemester} 최다 베이킹 주최자`}
+          member={topHost}
+          unit="회 주최"
+        />
+        <TopMemberCard
+          title={`${isViewingCurrent ? "이번학기" : selectedSemester} 최다 베이킹 참여자`}
+          member={topParticipant}
+          unit="회 참여"
+        />
+      </div>
+
       <section className="mt-8">
         {eventsInSemester.length === 0 ? (
           <p className="text-sm text-brand-300">이 학기에 종료된 활동이 없어요.</p>
@@ -270,6 +302,33 @@ export default function AlbumPage() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function TopMemberCard({
+  title,
+  member,
+  unit,
+}: {
+  title: string;
+  member: { username: string; count: number } | null;
+  unit: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-brand-100 bg-white p-4 text-center">
+      <p className="text-xs text-brand-500">{title}</p>
+      {member ? (
+        <p className="mt-1">
+          <span className="text-lg font-extrabold text-brand-700">{member.username}</span>
+          <span className="ml-1.5 text-sm font-semibold text-accent-700">
+            {member.count}
+            {unit}
+          </span>
+        </p>
+      ) : (
+        <p className="mt-1 text-sm text-brand-300">아직 데이터가 없어요.</p>
+      )}
     </div>
   );
 }

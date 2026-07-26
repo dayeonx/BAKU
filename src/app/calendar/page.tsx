@@ -564,7 +564,7 @@ function ManualParticipants({
     <div className="mt-3 rounded-lg bg-brand-50 p-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-bold text-brand-700">참여자 명단</p>
-        <Link href="/admin/participants" className="text-xs font-semibold text-accent-700 hover:underline">
+        <Link href="/admin/events" className="text-xs font-semibold text-accent-700 hover:underline">
           엑셀로 명단 등록하기 →
         </Link>
       </div>

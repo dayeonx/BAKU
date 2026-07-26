@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import { categoryLabel, categoryColor } from "@/lib/eventCategories";
 
@@ -29,6 +30,7 @@ export default function AdminEventsPage() {
   const [isOfficer, setIsOfficer] = useState(false);
   const [tab, setTab] = useState<"pending" | "approved" | "rejected">("pending");
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [openParticipantsFor, setOpenParticipantsFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -47,7 +49,9 @@ export default function AdminEventsPage() {
     if (officer) {
       const { data } = await supabase
         .from("events")
-        .select("id, category, event_date, end_date, location, items, status, signup_method, profiles(name)")
+        .select(
+          "id, category, event_date, end_date, location, items, status, signup_method, profiles!events_created_by_fkey(name)",
+        )
         .order("event_date", { ascending: false });
       setEvents(
         (data ?? []).map((e) => {
@@ -87,7 +91,9 @@ export default function AdminEventsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-brand-700">행사 관리</h1>
-          <p className="mt-2 text-sm text-brand-500">전체 행사를 상태별로 확인하고 승인·거절할 수 있어요.</p>
+          <p className="mt-2 text-sm text-brand-500">
+            전체 행사를 상태별로 확인하고 승인·거절하거나, 참여자 명단을 엑셀로 등록할 수 있어요.
+          </p>
         </div>
         <Link
           href="/calendar"
@@ -116,50 +122,156 @@ export default function AdminEventsPage() {
           <p className="text-sm text-brand-300">해당하는 행사가 없어요.</p>
         ) : (
           filtered.map((e) => (
-            <div
-              key={e.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-100 bg-white px-3 py-2.5 text-sm"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor(e.category) }} />
-                <span className="font-semibold text-brand-700">{categoryLabel(e.category)}</span>
-                <span className="text-brand-500">
-                  {e.event_date}
-                  {e.end_date && e.end_date !== e.event_date ? ` ~ ${e.end_date}` : ""} · {e.location}
-                  {e.items ? ` · ${e.items}` : ""}
-                </span>
-                <span className="text-xs text-brand-300">주최자 {e.host_name}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {e.signup_method === "manual" && e.status === "approved" && (
-                  <Link
-                    href="/admin/participants"
-                    className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-200"
-                  >
-                    참여자 명단 등록
-                  </Link>
-                )}
-                {e.status === "pending" && (
-                  <>
+            <div key={e.id} className="rounded-lg border border-brand-100 bg-white px-3 py-2.5 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor(e.category) }} />
+                  <span className="font-semibold text-brand-700">{categoryLabel(e.category)}</span>
+                  <span className="text-brand-500">
+                    {e.event_date}
+                    {e.end_date && e.end_date !== e.event_date ? ` ~ ${e.end_date}` : ""} · {e.location}
+                    {e.items ? ` · ${e.items}` : ""}
+                  </span>
+                  <span className="text-xs text-brand-300">주최자 {e.host_name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {e.signup_method === "manual" && e.status === "approved" && (
                     <button
-                      onClick={() => handleDecision(e.id, "approved")}
-                      className="rounded-full bg-accent-500 px-3 py-1 text-xs font-semibold text-white hover:bg-accent-700"
+                      onClick={() => setOpenParticipantsFor((cur) => (cur === e.id ? null : e.id))}
+                      className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-200"
                     >
-                      승인
+                      참여자 명단 등록 {openParticipantsFor === e.id ? "▲" : "▼"}
                     </button>
-                    <button
-                      onClick={() => handleDecision(e.id, "rejected")}
-                      className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-red-50 hover:text-red-600"
-                    >
-                      거절
-                    </button>
-                  </>
-                )}
+                  )}
+                  {e.status === "pending" && (
+                    <>
+                      <button
+                        onClick={() => handleDecision(e.id, "approved")}
+                        className="rounded-full bg-accent-500 px-3 py-1 text-xs font-semibold text-white hover:bg-accent-700"
+                      >
+                        승인
+                      </button>
+                      <button
+                        onClick={() => handleDecision(e.id, "rejected")}
+                        className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-red-50 hover:text-red-600"
+                      >
+                        거절
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
+
+              {openParticipantsFor === e.id && <ParticipantUploadPanel eventId={e.id} supabase={supabase} />}
             </div>
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function ParticipantUploadPanel({
+  eventId,
+  supabase,
+}: {
+  eventId: string;
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<{ created: string[]; skipped: { row: string; reason: string }[] } | null>(
+    null,
+  );
+
+  async function handleUpload() {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setResult(null);
+
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
+
+    const created: string[] = [];
+    const skipped: { row: string; reason: string }[] = [];
+
+    for (const row of rows) {
+      const name = String(row["이름"] ?? "").trim();
+      const studentId = String(row["학번"] ?? "").trim();
+      const label = `${name || "(이름 없음)"} / ${studentId || "(학번 없음)"}`;
+
+      if (!name || !studentId) {
+        skipped.push({ row: label, reason: "이름 또는 학번 누락" });
+        continue;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("name", name)
+        .eq("student_id", studentId)
+        .maybeSingle();
+
+      if (!profile) {
+        skipped.push({ row: label, reason: "일치하는 회원 계정을 찾을 수 없음" });
+        continue;
+      }
+
+      const { error } = await supabase.rpc("admin_add_participant", {
+        p_event_id: eventId,
+        p_profile_id: profile.id,
+      });
+
+      if (error) {
+        skipped.push({ row: label, reason: "등록 실패" });
+        continue;
+      }
+
+      created.push(label);
+    }
+
+    setUploading(false);
+    setResult({ created, skipped });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  return (
+    <div className="mt-3 rounded-xl bg-brand-50 p-3">
+      <p className="text-xs text-brand-500">
+        열 이름은 &quot;이름&quot;, &quot;학번&quot;이어야 하며, 이름과 학번이 모두 일치하는 계정만 등록돼요.
+      </p>
+      <div className="mt-2 flex items-center gap-3">
+        <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="text-xs" />
+        <button
+          onClick={handleUpload}
+          disabled={uploading}
+          className="rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
+        >
+          {uploading ? "등록 중..." : "업로드"}
+        </button>
+      </div>
+
+      {result && (
+        <div className="mt-3 space-y-2 text-xs">
+          <p className="text-accent-700">등록 완료: {result.created.length}명</p>
+          {result.skipped.length > 0 && (
+            <div className="text-red-600">
+              <p>건너뜀: {result.skipped.length}건</p>
+              <ul className="ml-4 list-disc">
+                {result.skipped.map((s, i) => (
+                  <li key={i}>
+                    {s.row}: {s.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
