@@ -7,6 +7,7 @@ import { categoryLabel } from "@/lib/eventCategories";
 import { semesterLabel, currentSemesterLabel } from "@/lib/semester";
 
 const BAKING_CATEGORIES = ["regular", "free", "monthly_special"];
+const PAST_SEMESTERS_PREVIEW = 3;
 
 type AlbumEvent = {
   id: string;
@@ -25,9 +26,8 @@ function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function formatShortDate(dateStr: string): string {
-  const [, month, day] = dateStr.split("-").map(Number);
-  return `${month}월 ${day}일`;
+function displaySemester(label: string): string {
+  return label.replace("학기", "");
 }
 
 function parsePrice(priceRange: string | null): number | null {
@@ -61,9 +61,7 @@ export default function AlbumPage() {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<AlbumEvent[]>([]);
   const [selectedSemester, setSelectedSemester] = useState<string | null>(null);
-  const [showRanking, setShowRanking] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
-  const archiveRef = useRef<HTMLDivElement>(null);
+  const [showAllPastSemesters, setShowAllPastSemesters] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -95,16 +93,9 @@ export default function AlbumPage() {
     [semesters],
   );
   const isViewingCurrent = selectedSemester === currentSemesterLabel();
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (archiveRef.current && !archiveRef.current.contains(e.target as Node)) {
-        setArchiveOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const visiblePastSemesters = showAllPastSemesters
+    ? pastSemesters
+    : pastSemesters.slice(0, PAST_SEMESTERS_PREVIEW);
 
   const eventsInSemester = useMemo(
     () => events.filter((e) => semesterLabel(e.event_date) === selectedSemester),
@@ -131,19 +122,12 @@ export default function AlbumPage() {
     return freq;
   }, [bakingEvents]);
 
-  const topFrequent = useMemo(
+  const recentItems = useMemo(
     () =>
       Array.from(itemFrequency.entries())
-        .sort((a, b) => b[1].count - a[1].count)
-        .slice(0, 5),
-    [itemFrequency],
-  );
-
-  const leastRecent = useMemo(
-    () =>
-      Array.from(itemFrequency.entries())
-        .sort((a, b) => a[1].lastDate.localeCompare(b[1].lastDate))
-        .slice(0, 5),
+        .sort((a, b) => b[1].lastDate.localeCompare(a[1].lastDate))
+        .slice(0, 3)
+        .map(([name]) => name),
     [itemFrequency],
   );
 
@@ -165,130 +149,112 @@ export default function AlbumPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold text-brand-700">앨범</h1>
-      <p className="mt-2 text-sm text-brand-500">종료된 동아리 활동의 기록과 후기를 모아볼 수 있어요.</p>
 
-      <div className="mt-6 flex items-center gap-3">
-        <h2 className="text-lg font-bold text-brand-700">
-          {isViewingCurrent ? "이번 학기" : selectedSemester}
-        </h2>
-        {!isViewingCurrent && (
+      {!isViewingCurrent && (
+        <div className="mt-6 flex items-center gap-3">
+          <h2 className="text-lg font-bold text-brand-700">{displaySemester(selectedSemester!)}</h2>
           <button
             onClick={() => setSelectedSemester(currentSemesterLabel())}
             className="text-xs font-semibold text-accent-700 hover:underline"
           >
             이번 학기로 돌아가기
           </button>
+        </div>
+      )}
+
+      <section className="mt-6">
+        {eventsInSemester.length === 0 ? (
+          <p className="text-sm text-brand-300">이 학기에 종료된 활동이 없어요.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2 md:grid-cols-5">
+            {eventsInSemester.map((e) => {
+              const hashtags = [categoryLabel(e.category), ...(e.items ? splitItems(e.items) : [])];
+              return (
+                <Link key={e.id} href={`/album/${e.id}`} className="group block">
+                  <div className="relative aspect-square overflow-hidden rounded-lg bg-brand-50">
+                    {e.cover_photo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={e.cover_photo_url}
+                        alt=""
+                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center px-2 text-center text-[10px] text-brand-300">
+                        아직 사진이 등록되지 않았습니다
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-1 truncate text-[11px] text-brand-500">
+                    {hashtags.map((tag) => `#${tag}`).join(" ")}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
         )}
-        <div ref={archiveRef} className="relative ml-auto">
-          <button
-            onClick={() => setArchiveOpen((v) => !v)}
-            className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
-          >
-            지난 학기 아카이브 {archiveOpen ? "▲" : "▼"}
-          </button>
-          {archiveOpen && (
-            <div className="absolute right-0 top-full z-10 mt-2 w-44 overflow-hidden rounded-xl border border-brand-100 bg-white shadow-lg">
-              {pastSemesters.length === 0 ? (
-                <p className="px-4 py-2.5 text-xs text-brand-300">지난 학기 기록이 없어요.</p>
-              ) : (
-                pastSemesters.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => {
-                      setSelectedSemester(s);
-                      setArchiveOpen(false);
-                    }}
-                    className={`block w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-brand-50 ${
-                      selectedSemester === s ? "font-semibold text-accent-700" : "text-brand-700"
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))
+      </section>
+
+      <section className="mt-12 grid grid-cols-1 gap-6 border-t border-brand-100 pt-8 sm:grid-cols-2">
+        <div className="rounded-2xl border border-brand-100 bg-white p-5">
+          <h3 className="text-sm font-bold text-brand-700">이번 학기</h3>
+          <dl className="mt-3 divide-y divide-brand-50 text-sm">
+            <div className="flex items-center justify-between py-2">
+              <dt className="text-brand-500">베이킹 횟수</dt>
+              <dd className="font-semibold text-brand-700">{stats.count}회</dd>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <dt className="text-brand-500">평균 베이킹 비용</dt>
+              <dd className="font-semibold text-brand-700">
+                {stats.avgPrice !== null ? `약 ${stats.avgPrice.toLocaleString()}원` : "-"}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <dt className="text-brand-500">평균 소요 시간</dt>
+              <dd className="font-semibold text-brand-700">
+                {stats.avgDuration !== null ? formatMinutes(stats.avgDuration) : "-"}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <dt className="text-brand-500">최근 베이킹 품목</dt>
+              <dd className="font-semibold text-brand-700">
+                {recentItems.length > 0 ? recentItems.join(", ") : "-"}
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="rounded-2xl border border-brand-100 bg-white p-5">
+          <h3 className="text-sm font-bold text-brand-700">지난 학기</h3>
+          {pastSemesters.length === 0 ? (
+            <p className="mt-3 text-sm text-brand-300">지난 학기 기록이 없어요.</p>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {visiblePastSemesters.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSelectedSemester(s)}
+                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    selectedSemester === s
+                      ? "bg-accent-500 text-white"
+                      : "bg-brand-50 text-brand-700 hover:bg-brand-100"
+                  }`}
+                >
+                  {displaySemester(s)}
+                </button>
+              ))}
+              {!showAllPastSemesters && pastSemesters.length > PAST_SEMESTERS_PREVIEW && (
+                <button
+                  onClick={() => setShowAllPastSemesters(true)}
+                  className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-brand-300 hover:bg-brand-50"
+                >
+                  더보기
+                </button>
               )}
             </div>
           )}
         </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-brand-100 bg-white px-4 py-3 text-sm text-brand-700">
-        <span>
-          베이킹 <strong>{stats.count}회</strong>
-        </span>
-        <span className="text-brand-200">|</span>
-        <span>
-          평균 가격 <strong>{stats.avgPrice !== null ? `약 ${stats.avgPrice.toLocaleString()}원` : "-"}</strong>
-        </span>
-        <span className="text-brand-200">|</span>
-        <span>
-          평균 소요 <strong>{stats.avgDuration !== null ? formatMinutes(stats.avgDuration) : "-"}</strong>
-        </span>
-        <button
-          onClick={() => setShowRanking((v) => !v)}
-          className="ml-auto text-xs font-semibold text-accent-700 hover:underline"
-        >
-          {showRanking ? "품목 랭킹 접기 ▲" : "품목 랭킹 보기 ▼"}
-        </button>
-      </div>
-
-      {showRanking && (
-        <div className="mt-2 grid gap-3 sm:grid-cols-2">
-          <RankCard title="자주 만든 빵" items={topFrequent.map(([name, v]) => `${name} (${v.count}회)`)} />
-          <RankCard
-            title="오랜만에 만든 빵"
-            items={leastRecent.map(([name, v]) => `${name} · 마지막 ${formatShortDate(v.lastDate)}`)}
-          />
-        </div>
-      )}
-
-      <section className="mt-8">
-        {eventsInSemester.length === 0 ? (
-          <p className="text-sm text-brand-300">이 학기에 종료된 활동이 없어요.</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 sm:gap-2 md:grid-cols-4">
-            {eventsInSemester.map((e) => (
-              <Link key={e.id} href={`/album/${e.id}`} className="group block">
-                <div className="relative aspect-square overflow-hidden rounded-lg bg-brand-50">
-                  {e.cover_photo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={e.cover_photo_url}
-                      alt=""
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center px-2 text-center text-xs text-brand-300">
-                      아직 사진이 등록되지 않았습니다
-                    </div>
-                  )}
-                </div>
-                <p className="mt-1.5 truncate text-xs font-semibold text-brand-700">
-                  {categoryLabel(e.category)} · {formatShortDate(e.event_date)}
-                </p>
-              </Link>
-            ))}
-          </div>
-        )}
       </section>
-    </div>
-  );
-}
-
-function RankCard({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="rounded-2xl border border-brand-100 bg-white p-4">
-      <p className="text-sm font-bold text-brand-700">{title}</p>
-      {items.length === 0 ? (
-        <p className="mt-2 text-xs text-brand-300">아직 데이터가 없어요.</p>
-      ) : (
-        <ol className="mt-2 space-y-1 text-sm text-brand-500">
-          {items.map((item, i) => (
-            <li key={i}>
-              {i + 1}. {item}
-            </li>
-          ))}
-        </ol>
-      )}
     </div>
   );
 }

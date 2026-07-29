@@ -15,6 +15,10 @@ export type EventCategoryMeta = {
   itemsLabel: string;
   needsPrice: boolean;
   needsGoogleForm: boolean;
+  googleFormLabel: string;
+  needsHostName: boolean;
+  hostLabel: string;
+  needsStudioConfirm: boolean;
 };
 
 export const EVENT_CATEGORIES: EventCategoryMeta[] = [
@@ -30,6 +34,10 @@ export const EVENT_CATEGORIES: EventCategoryMeta[] = [
     itemsLabel: "베이킹 품목",
     needsPrice: true,
     needsGoogleForm: false,
+    googleFormLabel: "",
+    needsHostName: true,
+    hostLabel: "주최자",
+    needsStudioConfirm: true,
   },
   {
     value: "free",
@@ -43,6 +51,10 @@ export const EVENT_CATEGORIES: EventCategoryMeta[] = [
     itemsLabel: "베이킹 품목",
     needsPrice: true,
     needsGoogleForm: false,
+    googleFormLabel: "",
+    needsHostName: true,
+    hostLabel: "주최자",
+    needsStudioConfirm: true,
   },
   {
     value: "monthly_special",
@@ -56,6 +68,10 @@ export const EVENT_CATEGORIES: EventCategoryMeta[] = [
     itemsLabel: "베이킹 품목",
     needsPrice: true,
     needsGoogleForm: false,
+    googleFormLabel: "",
+    needsHostName: true,
+    hostLabel: "주최자",
+    needsStudioConfirm: true,
   },
   {
     value: "welcome",
@@ -69,6 +85,10 @@ export const EVENT_CATEGORIES: EventCategoryMeta[] = [
     itemsLabel: "",
     needsPrice: false,
     needsGoogleForm: true,
+    googleFormLabel: "구글폼으로 신청하기",
+    needsHostName: false,
+    hostLabel: "주최자",
+    needsStudioConfirm: false,
   },
   {
     value: "mt",
@@ -82,6 +102,10 @@ export const EVENT_CATEGORIES: EventCategoryMeta[] = [
     itemsLabel: "",
     needsPrice: false,
     needsGoogleForm: true,
+    googleFormLabel: "구글폼으로 신청하기",
+    needsHostName: false,
+    hostLabel: "주최자",
+    needsStudioConfirm: false,
   },
   {
     value: "bread_tour",
@@ -95,6 +119,10 @@ export const EVENT_CATEGORIES: EventCategoryMeta[] = [
     itemsLabel: "",
     needsPrice: false,
     needsGoogleForm: true,
+    googleFormLabel: "구글폼으로 신청하기",
+    needsHostName: false,
+    hostLabel: "주최자",
+    needsStudioConfirm: false,
   },
   {
     value: "snack",
@@ -108,19 +136,27 @@ export const EVENT_CATEGORIES: EventCategoryMeta[] = [
     itemsLabel: "간식 품목",
     needsPrice: false,
     needsGoogleForm: false,
+    googleFormLabel: "",
+    needsHostName: false,
+    hostLabel: "주최자",
+    needsStudioConfirm: false,
   },
   {
     value: "pub",
     label: "주점",
     color: "#475569",
-    signup: "none",
+    signup: "manual",
     dateMode: "single",
     timeMode: "range",
     location: "single",
     needsItems: false,
     itemsLabel: "",
     needsPrice: false,
-    needsGoogleForm: false,
+    needsGoogleForm: true,
+    googleFormLabel: "구글폼으로 예약하기",
+    needsHostName: true,
+    hostLabel: "주준위",
+    needsStudioConfirm: false,
   },
 ];
 

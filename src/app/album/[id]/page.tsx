@@ -6,6 +6,9 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { categoryLabel, categoryColor } from "@/lib/eventCategories";
 
+const BAKING_CATEGORIES = ["regular", "free", "monthly_special"];
+const PARTICIPANT_ONLY_CATEGORIES = ["welcome", "mt", "bread_tour"];
+
 type EventDetail = {
   id: string;
   category: string;
@@ -28,16 +31,23 @@ type Review = {
   profile_id: string;
   author_name: string;
   review_text: string | null;
-  photo_urls: string[];
   created_at: string;
 };
 
 type Recipe = {
   id: string;
   title: string;
-  file_url: string;
-  file_name: string;
+  file_url: string | null;
+  file_name: string | null;
+  link_url: string | null;
   uploader_name: string;
+  created_at: string;
+};
+
+type Photo = {
+  id: string;
+  uploaded_by: string;
+  photo_url: string;
   created_at: string;
 };
 
@@ -56,11 +66,25 @@ export default function AlbumDetailPage() {
   const [participants, setParticipants] = useState<NameRow[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [menuPhotos, setMenuPhotos] = useState<Photo[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [isOfficer, setIsOfficer] = useState(false);
+  const [canManage, setCanManage] = useState(false);
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
-    setUserId(userData.user?.id ?? null);
+    const uid = userData.user?.id ?? null;
+    setUserId(uid);
+
+    if (uid) {
+      const { data: myProfile } = await supabase
+        .from("profiles")
+        .select("department, status")
+        .eq("id", uid)
+        .single();
+      setIsOfficer(!!myProfile && myProfile.department !== "member" && myProfile.status === "active");
+    }
 
     const { data: eventData } = await supabase
       .from("events")
@@ -72,17 +96,35 @@ export default function AlbumDetailPage() {
     setEvent(eventData);
 
     if (eventData) {
-      const [{ data: hostRows }, { data: participantRows }, { data: reviewRows }, { data: recipeRows }] =
-        await Promise.all([
-          supabase.rpc("album_hosts", { p_event_id: eventId }),
-          supabase.rpc("album_participants", { p_event_id: eventId }),
-          supabase.rpc("album_reviews_for_event", { p_event_id: eventId }),
-          supabase.rpc("album_recipes_for_event", { p_event_id: eventId }),
-        ]);
+      const isPub = eventData.category === "pub";
+      const [
+        { data: hostRows },
+        { data: participantRows },
+        { data: reviewRows },
+        { data: recipeRows },
+        { data: photoRows },
+        menuResult,
+        canManageResult,
+      ] = await Promise.all([
+        supabase.rpc("album_hosts", { p_event_id: eventId }),
+        supabase.rpc("album_participants", { p_event_id: eventId }),
+        supabase.rpc("album_reviews_for_event", { p_event_id: eventId }),
+        supabase.rpc("album_recipes_for_event", { p_event_id: eventId }),
+        supabase.rpc("album_photos_for_event", { p_event_id: eventId, p_photo_type: "gallery" }),
+        isPub
+          ? supabase.rpc("album_photos_for_event", { p_event_id: eventId, p_photo_type: "menu" })
+          : Promise.resolve({ data: [] as Photo[] }),
+        uid
+          ? supabase.rpc("can_manage_album_content", { p_event_id: eventId, p_profile_id: uid })
+          : Promise.resolve({ data: false }),
+      ]);
       setHosts(hostRows ?? []);
       setParticipants(participantRows ?? []);
       setReviews(reviewRows ?? []);
       setRecipes(recipeRows ?? []);
+      setPhotos(photoRows ?? []);
+      setMenuPhotos((menuResult.data as Photo[]) ?? []);
+      setCanManage(!!canManageResult.data);
     }
 
     setLoading(false);
@@ -93,7 +135,6 @@ export default function AlbumDetailPage() {
   }, [load]);
 
   const isHost = hosts.some((h) => h.profile_id === userId);
-  const isParticipant = participants.some((p) => p.profile_id === userId);
   const isFinished =
     !!event && event.status === "approved" && (event.end_date ?? event.event_date) < toDateKey(new Date());
   const myReview = reviews.find((r) => r.profile_id === userId);
@@ -115,6 +156,11 @@ export default function AlbumDetailPage() {
       </div>
     );
   }
+
+  const isBaking = BAKING_CATEGORIES.includes(event.category);
+  const isParticipantOnly = PARTICIPANT_ONLY_CATEGORIES.includes(event.category);
+  const isPub = event.category === "pub";
+  const isSnack = event.category === "snack";
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
@@ -146,58 +192,101 @@ export default function AlbumDetailPage() {
       </h1>
 
       <div className="mt-4 space-y-1 text-sm text-brand-700">
-        <p>
-          <span className="font-semibold text-brand-500">주최자</span>{" "}
-          {hosts.map((h) => h.name).join(", ") || "-"}
-        </p>
-        <p>
-          <span className="font-semibold text-brand-500">참여자</span>{" "}
-          {participants.length > 0 ? participants.map((p) => p.name).join(", ") : "없음"}
-        </p>
-        <p>
-          <span className="font-semibold text-brand-500">장소</span> {event.location}
-          {event.location_2 ? ` / ${event.location_2}` : ""}
-        </p>
-        {event.items && (
+        {isBaking && (
+          <>
+            <p>
+              <span className="font-semibold text-brand-500">주최자</span>{" "}
+              {hosts.map((h) => h.name).join(", ") || "-"}
+            </p>
+            <p>
+              <span className="font-semibold text-brand-500">참여자</span>{" "}
+              {participants.length > 0 ? participants.map((p) => p.name).join(", ") : "없음"}
+            </p>
+            {event.items && (
+              <p>
+                <span className="font-semibold text-brand-500">품목</span> {event.items}
+              </p>
+            )}
+          </>
+        )}
+        {isParticipantOnly && (
+          <p>
+            <span className="font-semibold text-brand-500">장소</span> {event.location}
+            {event.location_2 ? ` / ${event.location_2}` : ""}
+          </p>
+        )}
+        {isPub && (
+          <p>
+            <span className="font-semibold text-brand-500">주준위</span>{" "}
+            {hosts.map((h) => h.name).join(", ") || "-"}
+          </p>
+        )}
+        {isSnack && event.items && (
           <p>
             <span className="font-semibold text-brand-500">품목</span> {event.items}
           </p>
         )}
-        {event.price_range && (
-          <p>
-            <span className="font-semibold text-brand-500">가격대</span> {event.price_range}
-          </p>
-        )}
-        {event.start_time && (
-          <p>
-            <span className="font-semibold text-brand-500">시간</span> {event.start_time.slice(0, 5)}
-            {event.end_time ? ` ~ ${event.end_time.slice(0, 5)}` : ""}
-          </p>
-        )}
       </div>
 
-      <section className="mt-10">
-        <h2 className="text-lg font-bold text-brand-700">레시피</h2>
-        {recipes.length === 0 ? (
-          <p className="mt-2 text-sm text-brand-300">등록된 레시피가 없어요.</p>
-        ) : (
-          <ul className="mt-2 space-y-2">
-            {recipes.map((r) => (
-              <li
-                key={r.id}
-                className="flex items-center justify-between rounded-lg border border-brand-100 bg-white px-3 py-2 text-sm"
-              >
-                <a href={r.file_url} target="_blank" rel="noreferrer" className="font-semibold text-accent-700 hover:underline">
-                  {r.title}
-                </a>
-                <span className="text-xs text-brand-300">{r.uploader_name}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <PhotoSection
+        title="사진"
+        eventId={event.id}
+        photoType="gallery"
+        photos={photos}
+        canManage={canManage}
+        userId={userId}
+        isOfficer={isOfficer}
+        coverUrl={event.cover_photo_url}
+        supabase={supabase}
+        onDone={load}
+      />
 
-        {isHost && <RecipeForm eventId={event.id} userId={userId!} supabase={supabase} onDone={load} />}
-      </section>
+      {isBaking && (
+        <section className="mt-10">
+          <h2 className="text-lg font-bold text-brand-700">레시피</h2>
+          {recipes.length === 0 ? (
+            <p className="mt-2 text-sm text-brand-300">레시피가 등록되지 않았어요.</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {recipes.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between rounded-lg border border-brand-100 bg-white px-3 py-2 text-sm"
+                >
+                  <a
+                    href={r.file_url ?? r.link_url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-accent-700 hover:underline"
+                  >
+                    {r.title} {r.file_url ? "(PDF)" : "(링크)"}
+                  </a>
+                  <span className="text-xs text-brand-300">{r.uploader_name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {isHost && userId && (
+            <RecipeForm eventId={event.id} userId={userId} supabase={supabase} onDone={load} />
+          )}
+        </section>
+      )}
+
+      {isPub && (
+        <PhotoSection
+          title="대표 메뉴"
+          eventId={event.id}
+          photoType="menu"
+          photos={menuPhotos}
+          canManage={canManage}
+          userId={userId}
+          isOfficer={isOfficer}
+          coverUrl={null}
+          supabase={supabase}
+          onDone={load}
+        />
+      )}
 
       <section className="mt-10">
         <h2 className="text-lg font-bold text-brand-700">후기</h2>
@@ -208,48 +297,130 @@ export default function AlbumDetailPage() {
             {reviews.map((r) => (
               <li key={r.id} className="rounded-2xl border border-brand-100 bg-white p-4">
                 <p className="text-sm font-semibold text-brand-700">{r.author_name}</p>
-                {r.review_text && <p className="mt-1 text-sm text-brand-500">{r.review_text}</p>}
-                {r.photo_urls.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {r.photo_urls.map((url, i) => (
-                      <div key={i} className="group relative">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt="" className="h-24 w-24 rounded-lg object-cover" />
-                        {isHost && (
-                          <button
-                            onClick={async () => {
-                              await supabase.rpc("set_cover_photo", { p_event_id: event.id, p_photo_url: url });
-                              load();
-                            }}
-                            className={`absolute inset-x-0 bottom-0 rounded-b-lg px-1 py-0.5 text-[10px] font-semibold transition-opacity ${
-                              event.cover_photo_url === url
-                                ? "bg-accent-500 text-white"
-                                : "bg-black/50 text-white opacity-0 group-hover:opacity-100"
-                            }`}
-                          >
-                            {event.cover_photo_url === url ? "대표 사진" : "대표로 설정"}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                {r.review_text && (
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-brand-500">{r.review_text}</p>
                 )}
               </li>
             ))}
           </ul>
         )}
 
-        {userId && (isHost || isParticipant) && (
-          <ReviewForm
-            eventId={event.id}
-            userId={userId}
-            existing={myReview}
-            supabase={supabase}
-            onDone={load}
-          />
+        {userId && canManage && (
+          <ReviewForm eventId={event.id} userId={userId} existing={myReview} supabase={supabase} onDone={load} />
         )}
       </section>
     </div>
+  );
+}
+
+function PhotoSection({
+  title,
+  eventId,
+  photoType,
+  photos,
+  canManage,
+  userId,
+  isOfficer,
+  coverUrl,
+  supabase,
+  onDone,
+}: {
+  title: string;
+  eventId: string;
+  photoType: "gallery" | "menu";
+  photos: Photo[];
+  canManage: boolean;
+  userId: string | null;
+  isOfficer: boolean;
+  coverUrl: string | null;
+  supabase: ReturnType<typeof createClient>;
+  onDone: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleUpload() {
+    const files = fileInputRef.current?.files;
+    if (!files || files.length === 0 || !userId) return;
+
+    setUploading(true);
+    for (const file of Array.from(files)) {
+      const path = `photos/${eventId}/${userId}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage.from("album").upload(path, file);
+      if (!uploadError) {
+        const { data } = supabase.storage.from("album").getPublicUrl(path);
+        await supabase.from("album_photos").insert({
+          event_id: eventId,
+          uploaded_by: userId,
+          photo_url: data.publicUrl,
+          photo_type: photoType,
+        });
+      }
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    onDone();
+  }
+
+  async function handleDelete(photoId: string) {
+    await supabase.from("album_photos").delete().eq("id", photoId);
+    onDone();
+  }
+
+  async function handleSetCover(url: string) {
+    await supabase.rpc("set_cover_photo", { p_event_id: eventId, p_photo_url: url });
+    onDone();
+  }
+
+  return (
+    <section className="mt-10">
+      <h2 className="text-lg font-bold text-brand-700">{title}</h2>
+      {photos.length === 0 ? (
+        <p className="mt-2 text-sm text-brand-300">등록된 사진이 없어요.</p>
+      ) : (
+        <div className="mt-3 flex flex-col gap-3">
+          {photos.map((p) => (
+            <div key={p.id} className="group relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.photo_url} alt="" className="h-auto w-full rounded-xl" />
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-between rounded-b-xl bg-black/50 px-2 py-1 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                {photoType === "gallery" && canManage ? (
+                  <button
+                    onClick={() => handleSetCover(p.photo_url)}
+                    className={`text-[11px] font-semibold ${coverUrl === p.photo_url ? "text-accent-300" : "text-white"}`}
+                  >
+                    {coverUrl === p.photo_url ? "대표 사진" : "대표로 설정"}
+                  </button>
+                ) : (
+                  <span />
+                )}
+                {(p.uploaded_by === userId || isOfficer) && (
+                  <button
+                    onClick={() => handleDelete(p.id)}
+                    className="text-[11px] font-semibold hover:text-red-300"
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canManage && (
+        <div className="mt-3 flex items-center gap-3">
+          <input ref={fileInputRef} type="file" accept="image/*" multiple className="text-sm" />
+          <button
+            onClick={handleUpload}
+            disabled={uploading}
+            className="shrink-0 rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
+          >
+            {uploading ? "업로드 중..." : "사진 등록"}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -268,35 +439,20 @@ function ReviewForm({
 }) {
   const [text, setText] = useState(existing?.review_text ?? "");
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const tooShort = text.trim().length < 100;
 
   async function handleSubmit() {
+    if (tooShort) return;
     setSaving(true);
-    const files = fileInputRef.current?.files;
-    const newUrls: string[] = [];
-
-    if (files && files.length > 0) {
-      for (const file of Array.from(files)) {
-        const path = `reviews/${eventId}/${userId}/${Date.now()}-${file.name}`;
-        const { error: uploadError } = await supabase.storage.from("album").upload(path, file);
-        if (!uploadError) {
-          const { data } = supabase.storage.from("album").getPublicUrl(path);
-          newUrls.push(data.publicUrl);
-        }
-      }
-    }
-
-    const photoUrls = [...(existing?.photo_urls ?? []), ...newUrls];
 
     await supabase
       .from("album_reviews")
       .upsert(
-        { event_id: eventId, profile_id: userId, review_text: text || null, photo_urls: photoUrls },
+        { event_id: eventId, profile_id: userId, review_text: text.trim() },
         { onConflict: "event_id,profile_id" },
       );
 
     setSaving(false);
-    if (fileInputRef.current) fileInputRef.current.value = "";
     onDone();
   }
 
@@ -306,14 +462,16 @@ function ReviewForm({
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="활동 후기를 남겨보세요"
-        rows={3}
+        placeholder="활동 후기를 100자 이상 남겨주세요"
+        rows={5}
         className="mt-2 w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
       />
-      <input ref={fileInputRef} type="file" accept="image/*" multiple className="mt-2 text-sm" />
+      <p className={`mt-1 text-xs ${tooShort ? "text-red-500" : "text-brand-300"}`}>
+        {text.trim().length}자{tooShort ? " · 100자 이상 입력해주세요" : ""}
+      </p>
       <button
         onClick={handleSubmit}
-        disabled={saving}
+        disabled={saving || tooShort}
         className="mt-3 rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
       >
         {saving ? "저장 중..." : "저장하기"}
@@ -334,30 +492,40 @@ function RecipeForm({
   onDone: () => void;
 }) {
   const [title, setTitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit() {
     const file = fileInputRef.current?.files?.[0];
-    if (!file || !title.trim()) return;
+    if (!title.trim() || (!file && !linkUrl.trim())) return;
 
     setSaving(true);
-    const path = `recipes/${eventId}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("album").upload(path, file);
+    let fileUrl: string | null = null;
+    let fileName: string | null = null;
 
-    if (!uploadError) {
-      const { data } = supabase.storage.from("album").getPublicUrl(path);
-      await supabase.from("album_recipes").insert({
-        event_id: eventId,
-        uploaded_by: userId,
-        title: title.trim(),
-        file_url: data.publicUrl,
-        file_name: file.name,
-      });
+    if (file) {
+      const path = `recipes/${eventId}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage.from("album").upload(path, file);
+      if (!uploadError) {
+        const { data } = supabase.storage.from("album").getPublicUrl(path);
+        fileUrl = data.publicUrl;
+        fileName = file.name;
+      }
     }
+
+    await supabase.from("album_recipes").insert({
+      event_id: eventId,
+      uploaded_by: userId,
+      title: title.trim(),
+      file_url: fileUrl,
+      file_name: fileName,
+      link_url: linkUrl.trim() || null,
+    });
 
     setSaving(false);
     setTitle("");
+    setLinkUrl("");
     if (fileInputRef.current) fileInputRef.current.value = "";
     onDone();
   }
@@ -372,12 +540,20 @@ function RecipeForm({
         className="mt-2 w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
       />
       <input ref={fileInputRef} type="file" accept="application/pdf" className="mt-2 text-sm" />
+      <p className="mt-2 text-xs text-brand-300">PDF 파일을 올리거나, 아래에 레시피 링크를 입력해주세요.</p>
+      <input
+        value={linkUrl}
+        onChange={(e) => setLinkUrl(e.target.value)}
+        type="url"
+        placeholder="https://..."
+        className="mt-2 w-full rounded-lg border border-brand-100 px-3 py-2 text-sm"
+      />
       <button
         onClick={handleSubmit}
         disabled={saving}
         className="mt-3 rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
       >
-        {saving ? "업로드 중..." : "등록하기"}
+        {saving ? "등록 중..." : "등록하기"}
       </button>
     </div>
   );

@@ -36,7 +36,7 @@ export default function GuidePage() {
             주최 신청을 놓쳤거나 특별히 만들어보고 싶은 품목이 있다면 자유 주최를 활용해보세요.
           </p>
           <p className="text-brand-500">
-            단, 베이킹 비용이 지원되는 자유 주최는 <strong className="text-brand-700">주 1회</strong>로
+            단, 베이킹 비용이 지원되는 자유 주최는 <strong className="text-brand-700">주 2회</strong>로
             제한돼요. 특정 주에 활동이 몰리지 않고 매주 다양한 베이킹이 이어질 수 있도록, 자유 주최 신청이
             비어있는 주를 우선적으로 고려해주세요.
           </p>
@@ -86,15 +86,15 @@ export default function GuidePage() {
           <h3 className="text-sm font-bold text-brand-700">베이킹 스튜디오</h3>
           <dl className="mt-3 space-y-1 text-sm text-brand-500">
             <div className="flex gap-2">
-              <dt className="w-20 shrink-0 font-semibold text-brand-700">주소</dt>
+              <dt className="w-28 shrink-0 whitespace-nowrap font-semibold text-brand-700">주소</dt>
               <dd>{BAKING_PLACE.address}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-20 shrink-0 font-semibold text-brand-700">스튜디오 전화</dt>
+              <dt className="w-28 shrink-0 whitespace-nowrap font-semibold text-brand-700">스튜디오 전화</dt>
               <dd>{BAKING_PLACE.phone}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-20 shrink-0 font-semibold text-brand-700">사장님 연락처</dt>
+              <dt className="w-28 shrink-0 whitespace-nowrap font-semibold text-brand-700">사장님 연락처</dt>
               <dd>{BAKING_PLACE.ownerPhone}</dd>
             </div>
           </dl>
@@ -115,7 +115,7 @@ export default function GuidePage() {
             <li>
               참여자 지원금: 1인당 <strong>10,000원</strong> (1/N 금액에서 지원금을 뺀 나머지 금액만 납부)
             </li>
-            <li className="text-brand-300">* 자유 주최는 비용 지원이 주 1회로 제한돼요.</li>
+            <li className="text-brand-300">자유 주최는 비용 지원이 주 2회로 제한돼요.</li>
           </RuleCard>
 
           <RuleCard title="주최자 보상 제도">
@@ -131,19 +131,19 @@ export default function GuidePage() {
               공동주최는 불가)
             </li>
             <li className="text-brand-300">
-              * 주최자를 제외한 참여 인원이 4인 이상인 베이킹부터 주최자 비용이 면제돼요.
+              주최자를 제외한 참여 인원이 4인 이상인 베이킹부터 주최자 비용이 면제돼요.
             </li>
           </RuleCard>
 
           <RuleCard title="조별 미션">
             <li>정산 방식: 참여 인원 전체가 1/N으로 비용을 분담해요.</li>
             <li>참여자 보상: 학기말 조별 미션 참여율이 가장 우수한 조에게 상품을 지급해요.</li>
-            <li className="text-brand-300">* 주최자 보상금과 참여자 지원금은 제공되지 않아요.</li>
+            <li className="text-brand-300">주최자 보상금과 참여자 지원금은 제공되지 않아요.</li>
           </RuleCard>
 
           <RuleCard title="주최를 위한 사전 연습">
             <li>동아리 특별 할인가인 시간당 1인 7,000원이 적용돼요.</li>
-            <li className="text-brand-300">* 대여비·재료비 지원금은 제공되지 않아요.</li>
+            <li className="text-brand-300">대여비·재료비 지원금은 제공되지 않아요.</li>
           </RuleCard>
 
           <RuleCard title="기타 행사 (신환회, 엠티 등)">
