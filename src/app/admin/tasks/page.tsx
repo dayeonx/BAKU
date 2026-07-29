@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { inputClass } from "@/components/FormField";
+import DepartmentTaskSummary from "@/components/DepartmentTaskSummary";
 
 const BOARD_DEPARTMENTS = [
   { value: "president", label: "회장단" },
@@ -36,13 +38,6 @@ function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function compareDue(a: TaskStep, b: TaskStep): number {
-  if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
-  if (a.due_date) return -1;
-  if (b.due_date) return 1;
-  return 0;
-}
-
 type Project = { id: string; title: string; created_at: string };
 
 type TaskStep = {
@@ -60,7 +55,16 @@ type TaskStep = {
 type Comment = { id: string; profile_id: string; comment_text: string; created_at: string; author_name: string };
 
 export default function AdminTasksPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-6xl px-4 py-16 text-center text-brand-500">불러오는 중...</div>}>
+      <AdminTasksPageInner />
+    </Suspense>
+  );
+}
+
+function AdminTasksPageInner() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [isOfficer, setIsOfficer] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -108,6 +112,11 @@ export default function AdminTasksPage() {
   }, [load]);
 
   useEffect(() => {
+    const taskParam = searchParams.get("task");
+    if (taskParam) setSelectedTaskId(taskParam);
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!selectedTaskId) return;
     const task = tasks.find((t) => t.id === selectedTaskId);
     if (task?.project_id) {
@@ -140,47 +149,12 @@ export default function AdminTasksPage() {
     );
   }
 
-  const todayKey = toDateKey(new Date());
-
   return (
     <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold text-brand-700">업무 관리</h1>
 
-      <div className="mt-6 flex gap-4 overflow-x-auto pb-4">
-        {BOARD_DEPARTMENTS.map((dept) => {
-          const deptTasks = tasks
-            .filter((t) => t.department === dept.value && t.status !== "done")
-            .sort(compareDue);
-          return (
-            <div key={dept.value} className="w-64 shrink-0 rounded-2xl border border-brand-100 bg-brand-50/50 p-3">
-              <h2 className="px-1 font-bold text-brand-700">
-                {dept.label} <span className="font-normal text-brand-300">({deptTasks.length})</span>
-              </h2>
-              <div className="mt-2 space-y-1.5">
-                {deptTasks.length === 0 ? (
-                  <p className="px-1 text-xs text-brand-300">급한 업무가 없어요.</p>
-                ) : (
-                  deptTasks.map((t) => {
-                    const overdue = !!t.due_date && t.due_date < todayKey;
-                    return (
-                      <div
-                        key={t.id}
-                        onClick={() => setSelectedTaskId(t.id)}
-                        className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-white px-2 py-1.5 text-xs hover:bg-brand-100"
-                      >
-                        <CompleteToggle task={t} myDepartment={myDepartment} supabase={supabase} onDone={load} />
-                        <span className="min-w-0 flex-1 truncate">
-                          <span className={overdue ? "font-semibold text-red-600" : "text-brand-700"}>{t.title}</span>
-                          {t.due_date && <span className="ml-1 text-brand-300">~{t.due_date}</span>}
-                        </span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          );
-        })}
+      <div className="mt-6">
+        <DepartmentTaskSummary onSelectTask={setSelectedTaskId} />
       </div>
 
       <section className="mt-10">
@@ -491,6 +465,7 @@ function ProjectCard({
           {selectedStep && (
             <div className="w-1/2 border-l border-brand-100 pl-4">
               <TaskDetailPanel
+                key={selectedStep.id}
                 task={selectedStep}
                 userId={userId}
                 myDepartment={myDepartment}
@@ -629,7 +604,9 @@ function TaskDetailPanel({
               return (
                 <div key={c.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                   <div className={`max-w-[75%] ${mine ? "items-end" : "items-start"}`}>
-                    {!mine && <p className="mb-0.5 px-1 text-[11px] text-brand-300">{c.author_name}</p>}
+                    <p className={`mb-0.5 px-1 text-[11px] text-brand-300 ${mine ? "text-right" : "text-left"}`}>
+                      {c.author_name}
+                    </p>
                     <div
                       className={`rounded-2xl px-3 py-2 text-xs ${
                         mine

@@ -1,7 +1,7 @@
-// TODO: Notion / Instagram / 카카오톡 채널 링크가 정해지면 아래 값만 채우면 됩니다.
+// TODO: Notion 링크가 정해지면 아래 값만 채우면 됩니다.
 const NOTION_URL = "#";
-const INSTAGRAM_URL = "#";
-const KAKAO_CHANNEL_URL = "#";
+const INSTAGRAM_URL = "https://www.instagram.com/baku_kubaking";
+const KAKAO_CHANNEL_URL = "http://pf.kakao.com/_xkSxckn/chat";
 
 export default function Footer() {
   return (

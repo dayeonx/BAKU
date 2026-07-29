@@ -4,18 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { categoryLabel, categoryColor } from "@/lib/eventCategories";
-import { departmentLabel } from "@/lib/departments";
-import { isValidPassword, CREDENTIAL_FORMAT_HINT } from "@/lib/validation";
-import { Field, inputClass } from "@/components/FormField";
-
-type Profile = {
-  name: string;
-  student_id: string;
-  department: string;
-  status: string;
-  college: string | null;
-  major: string | null;
-};
+import { inputClass } from "@/components/FormField";
+import { BAKU_ACCOUNT } from "@/lib/bakuAccount";
 
 type EventLite = {
   id: string;
@@ -35,52 +25,49 @@ type Settlement = {
   id: string;
   event_id: string;
   host_id: string;
-  receipt_url: string;
-  bank_account: string;
-  total_amount: number;
-  host_reward_amount: number | null;
-  host_reward_paid: boolean;
+  studio_receipt_url: string | null;
+  studio_amount: number | null;
+  materials_receipt_url: string | null;
+  materials_amount: number | null;
+  participant_count: number | null;
   status: "submitted" | "assigned" | "completed";
 };
 
-type SettlementParticipant = { amount: number; paid: boolean };
+type ReceiptLinks = { studio: string | null; materials: string | null };
 
-type Coupon = { id: string; reason: string; used: boolean; created_at: string };
+type SettlementHost = { id: string; name: string; account: string; reward_amount: number; status: "pending" | "paid" | "not_needed" };
+
+// 정산 시스템은 이 세 종류의 활동에만 적용돼요. 나머지 종류는 별도 정산 방식이 정해지기 전까지 정산 없이 바로 완료 처리해요.
+const SETTLEMENT_CATEGORIES = ["regular", "free", "monthly_special"];
 
 function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function cardTitle(e: EventLite): string {
+  const [, m, d] = e.event_date.split("-");
+  const label = e.items || categoryLabel(e.category);
+  return `${Number(m)}/${Number(d)} ${label}`;
 }
 
 export default function MyPage() {
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [myEvents, setMyEvents] = useState<MyEvent[]>([]);
   const [settlements, setSettlements] = useState<Map<string, Settlement>>(new Map());
-  const [receiptLinks, setReceiptLinks] = useState<Map<string, string>>(new Map());
-  const [mySettlementAmounts, setMySettlementAmounts] = useState<Map<string, SettlementParticipant>>(new Map());
+  const [receiptLinks, setReceiptLinks] = useState<Map<string, ReceiptLinks>>(new Map());
   const [reviewedEventIds, setReviewedEventIds] = useState<Set<string>>(new Set());
-  const [coupons, setCoupons] = useState<Coupon[]>([]);
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
     const uid = userData.user?.id ?? null;
     setUserId(uid);
-    setUserEmail(userData.user?.email ?? null);
 
     if (!uid) {
       setLoading(false);
       return;
     }
-
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("name, student_id, department, status, college, major")
-      .eq("id", uid)
-      .single();
-    setProfile(profileData);
 
     const [{ data: participantRows }, { data: hostedRows }] = await Promise.all([
       supabase
@@ -123,45 +110,28 @@ export default function MyPage() {
 
       setReviewedEventIds(new Set((reviewRows ?? []).map((r) => r.event_id)));
 
-      const settlementIds = (settlementRows ?? []).map((s) => s.id);
-      if (settlementIds.length > 0) {
-        const { data: partRows } = await supabase
-          .from("settlement_participants")
-          .select("settlement_id, amount, paid")
-          .eq("profile_id", uid)
-          .in("settlement_id", settlementIds);
-
-        const idToEvent = new Map((settlementRows ?? []).map((s) => [s.id, s.event_id]));
-        const amountMap = new Map<string, SettlementParticipant>();
-        for (const p of partRows ?? []) {
-          const eventId = idToEvent.get(p.settlement_id);
-          if (eventId) amountMap.set(eventId, { amount: p.amount, paid: p.paid });
-        }
-        setMySettlementAmounts(amountMap);
-      } else {
-        setMySettlementAmounts(new Map());
-      }
-
       const linkEntries = await Promise.all(
         (settlementRows ?? []).map(async (s) => {
-          const { data } = await supabase.storage.from("settlements").createSignedUrl(s.receipt_url, 3600);
-          return [s.event_id, data?.signedUrl ?? null] as const;
+          const [studioSigned, materialsSigned] = await Promise.all([
+            s.studio_receipt_url
+              ? supabase.storage.from("settlements").createSignedUrl(s.studio_receipt_url, 3600)
+              : Promise.resolve({ data: null }),
+            s.materials_receipt_url
+              ? supabase.storage.from("settlements").createSignedUrl(s.materials_receipt_url, 3600)
+              : Promise.resolve({ data: null }),
+          ]);
+          return [
+            s.event_id,
+            { studio: studioSigned.data?.signedUrl ?? null, materials: materialsSigned.data?.signedUrl ?? null },
+          ] as const;
         }),
       );
-      setReceiptLinks(new Map(linkEntries.filter(([, url]) => !!url) as [string, string][]));
+      setReceiptLinks(new Map(linkEntries));
     } else {
       setSettlements(new Map());
       setReviewedEventIds(new Set());
-      setMySettlementAmounts(new Map());
       setReceiptLinks(new Map());
     }
-
-    const { data: couponRows } = await supabase
-      .from("coupons")
-      .select("id, reason, used, created_at")
-      .eq("profile_id", uid)
-      .order("created_at", { ascending: false });
-    setCoupons(couponRows ?? []);
 
     setLoading(false);
   }, [supabase]);
@@ -170,19 +140,11 @@ export default function MyPage() {
     load();
   }, [load]);
 
-  const todayKey = toDateKey(new Date());
-  const upcoming = myEvents
-    .filter((e) => (e.end_date ?? e.event_date) >= todayKey)
-    .sort((a, b) => a.event_date.localeCompare(b.event_date));
-  const completed = myEvents
-    .filter((e) => (e.end_date ?? e.event_date) < todayKey)
-    .sort((a, b) => b.event_date.localeCompare(a.event_date));
-
   if (loading) {
     return <div className="mx-auto max-w-4xl px-4 py-16 text-center text-brand-500">불러오는 중...</div>;
   }
 
-  if (!userId || !profile) {
+  if (!userId) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-16 text-center text-brand-500">
         로그인 후 이용할 수 있습니다.
@@ -190,213 +152,376 @@ export default function MyPage() {
     );
   }
 
+  const todayKey = toDateKey(new Date());
+  const completed = myEvents
+    .filter((e) => (e.end_date ?? e.event_date) < todayKey)
+    .sort((a, b) => b.event_date.localeCompare(a.event_date));
+  const needsAttention = completed.filter(
+    (e) => SETTLEMENT_CATEGORIES.includes(e.category) && settlements.get(e.id)?.status !== "completed",
+  );
+  const finished = completed.filter(
+    (e) => !SETTLEMENT_CATEGORIES.includes(e.category) || settlements.get(e.id)?.status === "completed",
+  );
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold text-brand-700">마이페이지</h1>
+      <p className="mt-2 text-sm text-brand-500">내가 주최하거나 참여한 활동의 정산을 처리하고 후기를 남겨보세요.</p>
 
-      <ProfileSection profile={profile} userId={userId} userEmail={userEmail} supabase={supabase} onDone={load} />
-
-      <section className="mt-10">
-        <h2 className="mb-3 text-lg font-bold text-brand-700">나의 일정</h2>
-
-        <h3 className="mb-2 text-sm font-bold text-accent-700">앞으로 참여할 일정</h3>
-        <UpcomingList events={upcoming} />
-
-        <h3 className="mb-2 mt-6 text-sm font-bold text-accent-700">참여 완료한 일정</h3>
-        <CompletedList
-          events={completed}
-          settlements={settlements}
-          receiptLinks={receiptLinks}
-          mySettlementAmounts={mySettlementAmounts}
-          reviewedEventIds={reviewedEventIds}
-          userId={userId}
-          supabase={supabase}
-          onDone={load}
-        />
+      <section className="mt-8">
+        {needsAttention.length === 0 ? (
+          <p className="text-sm text-brand-300">정산이 필요한 활동이 없어요.</p>
+        ) : (
+          needsAttention.map((e) => (
+            <SettlementBigCard
+              key={e.id}
+              event={e}
+              settlement={settlements.get(e.id)}
+              receiptLinks={receiptLinks.get(e.id)}
+              isHost={e.isHost}
+              isParticipant={e.isParticipant}
+              userId={userId}
+              supabase={supabase}
+              onDone={load}
+            />
+          ))
+        )}
       </section>
 
       <section className="mt-10">
-        <h2 className="mb-3 text-lg font-bold text-brand-700">내 쿠폰</h2>
-        <CouponList coupons={coupons} />
+        <h2 className="mb-3 text-lg font-bold text-brand-700">내가 한 활동</h2>
+        <FinishedActivityList events={finished} reviewedEventIds={reviewedEventIds} />
       </section>
     </div>
   );
 }
 
-function UpcomingList({ events }: { events: MyEvent[] }) {
-  if (events.length === 0) {
-    return <p className="text-sm text-brand-300">앞으로 참여할 일정이 없어요.</p>;
-  }
-  return (
-    <ul className="space-y-2">
-      {events.map((e) => (
-        <li
-          key={e.id}
-          className="flex items-center gap-2 rounded-lg border border-brand-100 bg-white px-3 py-2 text-sm text-brand-700"
-        >
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor(e.category) }} />
-          <span className="font-semibold">{categoryLabel(e.category)}</span>
-          <span className="text-brand-500">
-            {e.event_date}
-            {e.end_date && e.end_date !== e.event_date ? ` ~ ${e.end_date}` : ""} · {e.location}
-            {e.items ? ` · ${e.items}` : ""}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function CompletedList({
-  events,
-  settlements,
+function SettlementBigCard({
+  event,
+  settlement,
   receiptLinks,
-  mySettlementAmounts,
-  reviewedEventIds,
+  isHost,
+  isParticipant,
   userId,
   supabase,
   onDone,
 }: {
-  events: MyEvent[];
-  settlements: Map<string, Settlement>;
-  receiptLinks: Map<string, string>;
-  mySettlementAmounts: Map<string, SettlementParticipant>;
-  reviewedEventIds: Set<string>;
+  event: MyEvent;
+  settlement: Settlement | undefined;
+  receiptLinks: ReceiptLinks | undefined;
+  isHost: boolean;
+  isParticipant: boolean;
   userId: string;
   supabase: ReturnType<typeof createClient>;
   onDone: () => void;
 }) {
-  if (events.length === 0) {
-    return <p className="text-sm text-brand-300">아직 완료한 활동이 없어요.</p>;
-  }
+  const title = cardTitle(event);
+  const statusTag = !settlement
+    ? isHost
+      ? "정산 등록"
+      : "정산 대기중"
+    : settlement.status === "submitted"
+      ? "정산 등록됨"
+      : "정산 진행";
 
   return (
-    <ul className="space-y-3">
-      {events.map((e) => {
-        const settlement = settlements.get(e.id);
-        const reviewed = reviewedEventIds.has(e.id);
-        const myAmount = mySettlementAmounts.get(e.id);
+    <div className="mb-4 rounded-2xl border border-brand-100 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-lg font-extrabold text-brand-700">&lt;{title}&gt;</span>
+        <span className="rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700">{statusTag}</span>
+      </div>
+      <p className="mt-1 text-xs text-brand-500">
+        {event.event_date}
+        {event.end_date && event.end_date !== event.event_date ? ` ~ ${event.end_date}` : ""} · {event.location}
+      </p>
 
-        return (
-          <li key={e.id} className="rounded-lg border border-brand-100 bg-white px-3 py-2.5 text-sm">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor(e.category) }} />
-              <span className="font-semibold text-brand-700">{categoryLabel(e.category)}</span>
-              <span className="text-brand-500">
-                {e.event_date}
-                {e.end_date && e.end_date !== e.event_date ? ` ~ ${e.end_date}` : ""} · {e.location}
-                {e.items ? ` · ${e.items}` : ""}
-              </span>
-            </div>
-
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              {e.isHost && (
-                <SettlementHostBadge
-                  eventId={e.id}
-                  settlement={settlement}
-                  receiptLink={settlement ? receiptLinks.get(e.id) : undefined}
-                  userId={userId}
-                  supabase={supabase}
-                  onDone={onDone}
-                />
-              )}
-              {!e.isHost && e.isParticipant && <SettlementParticipantBadge settlement={settlement} myAmount={myAmount} />}
-
-              <Link
-                href={`/album/${e.id}`}
-                className={`rounded-full px-3 py-1 font-semibold ${
-                  reviewed ? "bg-brand-50 text-brand-500" : "bg-accent-500 text-white hover:bg-accent-700"
-                }`}
-              >
-                {reviewed ? "후기 작성 완료" : "후기 작성하러 가기 →"}
-              </Link>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+      <div className="mt-4 space-y-4">
+        {isHost && (
+          <HostSettlementSection
+            eventId={event.id}
+            settlement={settlement}
+            receiptLinks={receiptLinks}
+            userId={userId}
+            supabase={supabase}
+            onDone={onDone}
+          />
+        )}
+        {isParticipant && (
+          <div className={isHost ? "border-t border-brand-100 pt-4" : ""}>
+            <ParticipantSettlementSection settlement={settlement} userId={userId} supabase={supabase} onDone={onDone} />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
-function SettlementHostBadge({
+const HOST_REWARD_STATUS_LABEL: Record<SettlementHost["status"], string> = {
+  pending: "입금 대기중",
+  paid: "입금 완료",
+  not_needed: "입금할 필요 없음",
+};
+
+function HostSettlementSection({
   eventId,
   settlement,
-  receiptLink,
+  receiptLinks,
   userId,
   supabase,
   onDone,
 }: {
   eventId: string;
   settlement: Settlement | undefined;
-  receiptLink: string | undefined;
+  receiptLinks: ReceiptLinks | undefined;
   userId: string;
   supabase: ReturnType<typeof createClient>;
   onDone: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [participants, setParticipants] = useState<{ id: string; name: string; amount: number; paid: boolean }[] | null>(
+    null,
+  );
+  const [hosts, setHosts] = useState<SettlementHost[] | null>(null);
+
+  useEffect(() => {
+    if (!settlement) return;
+    (async () => {
+      const { data } = await supabase
+        .from("settlement_hosts")
+        .select("id, name, account, reward_amount, status")
+        .eq("settlement_id", settlement.id);
+      setHosts(data ?? []);
+    })();
+  }, [settlement, supabase]);
+
+  useEffect(() => {
+    if (!settlement || settlement.status !== "assigned") return;
+    (async () => {
+      const { data } = await supabase
+        .from("settlement_participants")
+        .select("id, amount, paid, profiles(name)")
+        .eq("settlement_id", settlement.id);
+      setParticipants(
+        (data ?? []).map((r) => {
+          const p = r.profiles as unknown as { name: string } | null;
+          return { id: r.id, amount: r.amount, paid: r.paid, name: p?.name ?? "-" };
+        }),
+      );
+    })();
+  }, [settlement, supabase]);
 
   if (!settlement) {
+    return <SettlementForm eventId={eventId} userId={userId} supabase={supabase} onDone={onDone} />;
+  }
+
+  if (settlement.status === "submitted") {
     return (
-      <>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="rounded-full bg-brand-100 px-3 py-1 font-semibold text-brand-700 hover:bg-brand-200"
-        >
-          정산 등록하기
-        </button>
-        {open && (
-          <div className="mt-2 w-full">
-            <SettlementForm eventId={eventId} userId={userId} supabase={supabase} onDone={onDone} />
-          </div>
-        )}
-      </>
+      <div className="space-y-1 text-sm text-brand-500">
+        <p>임원진 확인을 기다리고 있어요.</p>
+        <div className="flex flex-wrap gap-3 text-xs">
+          {receiptLinks?.studio && (
+            <a href={receiptLinks.studio} target="_blank" rel="noreferrer" className="font-semibold text-accent-700 hover:underline">
+              스튜디오 영수증 보기
+            </a>
+          )}
+          {receiptLinks?.materials && (
+            <a href={receiptLinks.materials} target="_blank" rel="noreferrer" className="font-semibold text-accent-700 hover:underline">
+              재료 영수증 보기
+            </a>
+          )}
+        </div>
+        <p className="text-xs text-brand-300">
+          스튜디오 {settlement.studio_amount?.toLocaleString() ?? 0}원
+          {settlement.materials_amount ? ` · 재료 ${settlement.materials_amount.toLocaleString()}원` : ""} · 참여자{" "}
+          {settlement.participant_count ?? 0}명
+        </p>
+      </div>
     );
   }
 
-  const statusLabel =
-    settlement.status === "submitted"
-      ? "정산 접수됨 · 임원진 확인 대기중"
-      : settlement.status === "assigned"
-        ? "정산 처리중"
-        : "정산 완료";
-
   return (
-    <span className="flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1 font-semibold text-brand-700">
-      {statusLabel}
-      {receiptLink && (
-        <a href={receiptLink} target="_blank" rel="noreferrer" className="text-accent-700 hover:underline">
-          영수증 보기
-        </a>
-      )}
-    </span>
+    <div className="space-y-3">
+      <div>
+        <p className="text-xs font-bold text-brand-700">참여자 정산 현황</p>
+        <div className="mt-1 space-y-1">
+          {participants === null ? (
+            <p className="text-xs text-brand-300">불러오는 중...</p>
+          ) : participants.length === 0 ? (
+            <p className="text-xs text-brand-300">참여자가 없어요.</p>
+          ) : (
+            participants.map((p) => (
+              <div key={p.id} className="flex items-center justify-between text-xs text-brand-700">
+                <span>
+                  {p.name} · {p.amount.toLocaleString()}원
+                </span>
+                <span className={p.paid ? "font-semibold text-accent-700" : "text-brand-300"}>
+                  {p.paid ? "입금 완료" : "입금 대기중"}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-bold text-brand-700">주최자 보상금</p>
+        <div className="mt-1 space-y-1">
+          {hosts === null ? (
+            <p className="text-xs text-brand-300">불러오는 중...</p>
+          ) : (
+            hosts.map((h) => (
+              <div key={h.id} className="flex items-center justify-between text-xs text-brand-700">
+                <span>
+                  {h.name} · {h.reward_amount.toLocaleString()}원 입금
+                </span>
+                <span className={h.status === "paid" ? "font-semibold text-accent-700" : "text-brand-300"}>
+                  {HOST_REWARD_STATUS_LABEL[h.status]}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
-function SettlementParticipantBadge({
+function ParticipantSettlementSection({
   settlement,
-  myAmount,
+  userId,
+  supabase,
+  onDone,
 }: {
   settlement: Settlement | undefined;
-  myAmount: SettlementParticipant | undefined;
+  userId: string;
+  supabase: ReturnType<typeof createClient>;
+  onDone: () => void;
 }) {
+  const [mine, setMine] = useState<
+    { id: string; amount: number; paid: boolean; couponReason: string | null } | null | undefined
+  >(undefined);
+  const [confirming, setConfirming] = useState(false);
+  const [myCoupons, setMyCoupons] = useState<{ id: string; reason: string; max_amount: number | null }[]>([]);
+  const [selectedCouponId, setSelectedCouponId] = useState("");
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+
+  useEffect(() => {
+    if (!settlement || settlement.status !== "assigned") {
+      setMine(null);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("settlement_participants")
+        .select("id, amount, paid, coupons(reason)")
+        .eq("settlement_id", settlement.id)
+        .eq("profile_id", userId)
+        .maybeSingle();
+      if (!data) {
+        setMine(null);
+        return;
+      }
+      const coupon = data.coupons as unknown as { reason: string } | null;
+      setMine({ id: data.id, amount: data.amount, paid: data.paid, couponReason: coupon?.reason ?? null });
+
+      const { data: couponRows } = await supabase
+        .from("coupons")
+        .select("id, reason, max_amount")
+        .eq("profile_id", userId)
+        .eq("used", false);
+      setMyCoupons(couponRows ?? []);
+    })();
+  }, [settlement, supabase, userId]);
+
+  async function handleConfirmPaid() {
+    if (!mine) return;
+    await supabase.rpc("mark_settlement_participant_paid", { p_id: mine.id });
+    setConfirming(false);
+    onDone();
+  }
+
+  async function handleApplyCoupon() {
+    if (!mine || !selectedCouponId) return;
+    setApplyingCoupon(true);
+    await supabase.rpc("apply_settlement_coupon", { p_participant_id: mine.id, p_coupon_id: selectedCouponId });
+    setApplyingCoupon(false);
+    onDone();
+  }
+
   if (!settlement) {
-    return <span className="rounded-full bg-brand-50 px-3 py-1 font-semibold text-brand-300">정산 대기중</span>;
+    return <p className="text-sm text-brand-300">주최자의 정산 등록을 기다리고 있어요.</p>;
   }
-  if (!myAmount) {
-    return (
-      <span className="rounded-full bg-brand-50 px-3 py-1 font-semibold text-brand-300">
-        정산 금액 배정 대기중
-      </span>
-    );
+  if (settlement.status === "submitted") {
+    return <p className="text-sm text-brand-300">임원진의 금액 배정을 기다리고 있어요.</p>;
   }
+  if (mine === undefined) {
+    return <p className="text-xs text-brand-300">불러오는 중...</p>;
+  }
+  if (mine === null) {
+    return <p className="text-sm text-brand-300">배정된 정산 금액이 없어요.</p>;
+  }
+
   return (
-    <span
-      className={`rounded-full px-3 py-1 font-semibold ${
-        myAmount.paid ? "bg-brand-50 text-brand-700" : "bg-accent-50 text-accent-700"
-      }`}
-    >
-      납부할 금액 {myAmount.amount.toLocaleString()}원 · {myAmount.paid ? "입금 확인됨" : "입금 대기중"}
-    </span>
+    <div className="space-y-2 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-brand-700">
+          납부할 금액 {mine.amount.toLocaleString()}원
+          <span className="ml-2 text-xs text-accent-700">지원금 10,000원 적용됨</span>
+          {mine.couponReason && <span className="ml-2 text-xs text-accent-700">쿠폰 적용됨 ({mine.couponReason})</span>}
+        </span>
+        {mine.paid ? (
+          <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-500">
+            입금 완료 · 임원진 확인 대기중
+          </span>
+        ) : confirming ? (
+          <span className="flex items-center gap-1.5 text-xs">
+            <span className="text-brand-700">정산 완료하셨나요?</span>
+            <button
+              onClick={handleConfirmPaid}
+              className="rounded-full bg-accent-500 px-2.5 py-1 font-semibold text-white hover:bg-accent-700"
+            >
+              예
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="rounded-full bg-brand-100 px-2.5 py-1 font-semibold text-brand-700 hover:bg-brand-200"
+            >
+              아니오
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => setConfirming(true)}
+            className="rounded-full bg-accent-500 px-3 py-1 text-xs font-semibold text-white hover:bg-accent-700"
+          >
+            정산완료
+          </button>
+        )}
+      </div>
+      {!mine.paid && !mine.couponReason && myCoupons.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-brand-50 px-3 py-2">
+          <select
+            value={selectedCouponId}
+            onChange={(e) => setSelectedCouponId(e.target.value)}
+            className="rounded-lg border border-brand-100 px-2 py-1.5 text-xs"
+          >
+            <option value="">보유 쿠폰 선택</option>
+            {myCoupons.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.reason}
+                {c.max_amount != null ? ` (최대 ${c.max_amount.toLocaleString()}원)` : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleApplyCoupon}
+            disabled={!selectedCouponId || applyingCoupon}
+            className="rounded-full bg-accent-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
+          >
+            {applyingCoupon ? "적용 중..." : "쿠폰 적용하기"}
+          </button>
+        </div>
+      )}
+      {!mine.paid && <p className="text-xs text-brand-300">입금 계좌: {BAKU_ACCOUNT}</p>}
+    </div>
   );
 }
 
@@ -411,63 +536,155 @@ function SettlementForm({
   supabase: ReturnType<typeof createClient>;
   onDone: () => void;
 }) {
-  const [bankAccount, setBankAccount] = useState("");
-  const [totalAmount, setTotalAmount] = useState("");
+  const [studioAmount, setStudioAmount] = useState("");
+  const [materialsAmount, setMaterialsAmount] = useState("");
+  const [participantCount, setParticipantCount] = useState("");
+  const [host1Name, setHost1Name] = useState("");
+  const [host1Account, setHost1Account] = useState("");
+  const [coHosted, setCoHosted] = useState(false);
+  const [host2Name, setHost2Name] = useState("");
+  const [host2Account, setHost2Account] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const studioFileRef = useRef<HTMLInputElement>(null);
+  const materialsFileRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit() {
-    const file = fileInputRef.current?.files?.[0];
-    if (!file || !bankAccount.trim() || !totalAmount) {
-      setError("영수증, 계좌정보, 총 지출금액을 모두 입력해주세요.");
+    const studioFile = studioFileRef.current?.files?.[0];
+    const materialsFile = materialsFileRef.current?.files?.[0];
+
+    if (!studioFile || !studioAmount || !participantCount || !host1Name.trim() || !host1Account.trim()) {
+      setError("필수 항목(스튜디오 영수증·비용, 참여자 인원수, 주최자 이름·계좌)을 모두 입력해주세요.");
+      return;
+    }
+    if (coHosted && (!host2Name.trim() || !host2Account.trim())) {
+      setError("공동주최자의 이름과 계좌를 입력해주세요.");
       return;
     }
 
     setSaving(true);
     setError(null);
 
-    const path = `receipts/${eventId}/${Date.now()}-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("settlements").upload(path, file);
-    if (uploadError) {
-      setError("영수증 업로드에 실패했어요.");
+    const studioPath = `studio/${eventId}/${Date.now()}-${studioFile.name}`;
+    const { error: studioUploadError } = await supabase.storage.from("settlements").upload(studioPath, studioFile);
+    if (studioUploadError) {
+      setError("스튜디오 영수증 업로드에 실패했어요.");
       setSaving(false);
       return;
     }
 
-    const { error: insertError } = await supabase.from("settlements").insert({
-      event_id: eventId,
-      host_id: userId,
-      receipt_url: path,
-      bank_account: bankAccount.trim(),
-      total_amount: Number(totalAmount),
-    });
+    let materialsPath: string | null = null;
+    if (materialsFile) {
+      materialsPath = `materials/${eventId}/${Date.now()}-${materialsFile.name}`;
+      const { error: materialsUploadError } = await supabase.storage
+        .from("settlements")
+        .upload(materialsPath, materialsFile);
+      if (materialsUploadError) {
+        setError("재료 영수증 업로드에 실패했어요.");
+        setSaving(false);
+        return;
+      }
+    }
 
-    setSaving(false);
-    if (insertError) {
+    const { data: created, error: insertError } = await supabase
+      .from("settlements")
+      .insert({
+        event_id: eventId,
+        host_id: userId,
+        studio_receipt_url: studioPath,
+        studio_amount: Number(studioAmount),
+        materials_receipt_url: materialsPath,
+        materials_amount: materialsAmount ? Number(materialsAmount) : null,
+        participant_count: Number(participantCount),
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !created) {
+      setSaving(false);
       setError("정산 등록에 실패했어요.");
       return;
     }
+
+    const hostRows = [{ settlement_id: created.id, name: host1Name.trim(), account: host1Account.trim() }];
+    if (coHosted) {
+      hostRows.push({ settlement_id: created.id, name: host2Name.trim(), account: host2Account.trim() });
+    }
+    await supabase.from("settlement_hosts").insert(hostRows);
+
+    setSaving(false);
     onDone();
   }
 
   return (
     <div className="rounded-xl border border-brand-100 bg-brand-50 p-3">
       <p className="text-xs font-bold text-brand-700">정산 등록</p>
-      <div className="mt-2 space-y-2">
-        <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="text-xs" />
+      <div className="mt-2 space-y-3">
+        <div>
+          <p className="mb-1 text-xs font-semibold text-brand-700">스튜디오 영수증 사진</p>
+          <input ref={studioFileRef} type="file" accept="image/*,.pdf" className="text-xs" />
+        </div>
         <input
-          value={bankAccount}
-          onChange={(e) => setBankAccount(e.target.value)}
-          placeholder="계좌정보 (예: 카카오뱅크 3333-01-1234567 홍길동)"
+          value={studioAmount}
+          onChange={(e) => setStudioAmount(e.target.value.replace(/[^0-9]/g, ""))}
+          placeholder="스튜디오 비용 (원)"
+          className={inputClass}
+        />
+        <div>
+          <p className="mb-1 text-xs font-semibold text-brand-700">재료 영수증 사진 (따로 구매한 경우)</p>
+          <input ref={materialsFileRef} type="file" accept="image/*,.pdf" className="text-xs" />
+        </div>
+        <input
+          value={materialsAmount}
+          onChange={(e) => setMaterialsAmount(e.target.value.replace(/[^0-9]/g, ""))}
+          placeholder="재료 비용 (원, 선택)"
           className={inputClass}
         />
         <input
-          value={totalAmount}
-          onChange={(e) => setTotalAmount(e.target.value.replace(/[^0-9]/g, ""))}
-          placeholder="총 지출금액 (원)"
+          value={participantCount}
+          onChange={(e) => setParticipantCount(e.target.value.replace(/[^0-9]/g, ""))}
+          placeholder="베이킹 참여자 (주최자 제외) 총 인원수"
           className={inputClass}
         />
+
+        <div className="rounded-lg border border-brand-100 bg-white p-3">
+          <p className="text-xs font-semibold text-brand-700">주최자 정보</p>
+          <div className="mt-2 flex gap-2">
+            <input
+              value={host1Name}
+              onChange={(e) => setHost1Name(e.target.value)}
+              placeholder="주최자 이름"
+              className={inputClass}
+            />
+            <input
+              value={host1Account}
+              onChange={(e) => setHost1Account(e.target.value)}
+              placeholder="환급받을 계좌"
+              className={inputClass}
+            />
+          </div>
+          <label className="mt-2 flex items-center gap-2 text-xs text-brand-500">
+            <input type="checkbox" checked={coHosted} onChange={(e) => setCoHosted(e.target.checked)} />
+            공동주최인가요?
+          </label>
+          {coHosted && (
+            <div className="mt-2 flex gap-2">
+              <input
+                value={host2Name}
+                onChange={(e) => setHost2Name(e.target.value)}
+                placeholder="공동주최자 이름"
+                className={inputClass}
+              />
+              <input
+                value={host2Account}
+                onChange={(e) => setHost2Account(e.target.value)}
+                placeholder="공동주최자 계좌"
+                className={inputClass}
+              />
+            </div>
+          )}
+        </div>
+
         {error && <p className="text-xs text-red-600">{error}</p>}
         <button
           onClick={handleSubmit}
@@ -481,187 +698,45 @@ function SettlementForm({
   );
 }
 
-function CouponList({ coupons }: { coupons: Coupon[] }) {
-  if (coupons.length === 0) {
-    return <p className="text-sm text-brand-300">아직 발급된 쿠폰이 없어요.</p>;
+function FinishedActivityList({
+  events,
+  reviewedEventIds,
+}: {
+  events: MyEvent[];
+  reviewedEventIds: Set<string>;
+}) {
+  if (events.length === 0) {
+    return <p className="text-sm text-brand-300">아직 완료한 활동이 없어요.</p>;
   }
   return (
     <ul className="space-y-2">
-      {coupons.map((c) => (
-        <li
-          key={c.id}
-          className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
-            c.used ? "border-brand-100 bg-brand-50 text-brand-300" : "border-accent-500/30 bg-white text-brand-700"
-          }`}
-        >
-          <span>{c.reason}</span>
-          <span className="text-xs font-semibold">{c.used ? "사용완료" : "사용가능"}</span>
-        </li>
-      ))}
+      {events.map((e) => {
+        const reviewed = reviewedEventIds.has(e.id);
+        return (
+          <li
+            key={e.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-100 bg-white px-3 py-2 text-sm"
+          >
+            <span className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: categoryColor(e.category) }} />
+              <span className="font-semibold text-brand-700">{categoryLabel(e.category)}</span>
+              <span className="text-brand-500">
+                {e.event_date}
+                {e.end_date && e.end_date !== e.event_date ? ` ~ ${e.end_date}` : ""} · {e.location}
+                {e.items ? ` · ${e.items}` : ""}
+              </span>
+            </span>
+            <Link
+              href={`/album/${e.id}`}
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                reviewed ? "bg-brand-50 text-brand-500" : "bg-accent-500 text-white hover:bg-accent-700"
+              }`}
+            >
+              {reviewed ? "후기 작성 완료" : "후기 작성하러 가기 →"}
+            </Link>
+          </li>
+        );
+      })}
     </ul>
-  );
-}
-
-function ProfileSection({
-  profile,
-  userId,
-  userEmail,
-  supabase,
-  onDone,
-}: {
-  profile: Profile;
-  userId: string;
-  userEmail: string | null;
-  supabase: ReturnType<typeof createClient>;
-  onDone: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [college, setCollege] = useState(profile.college ?? "");
-  const [major, setMajor] = useState(profile.major ?? "");
-  const [saving, setSaving] = useState(false);
-
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
-  const [passwordSaving, setPasswordSaving] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordDone, setPasswordDone] = useState(false);
-
-  async function handleProfileSave() {
-    setSaving(true);
-    await supabase.from("profiles").update({ college: college.trim(), major: major.trim() }).eq("id", userId);
-    setSaving(false);
-    setEditing(false);
-    onDone();
-  }
-
-  async function handlePasswordSave() {
-    setPasswordError(null);
-    if (!isValidPassword(newPassword)) {
-      setPasswordError(CREDENTIAL_FORMAT_HINT);
-      return;
-    }
-    if (newPassword !== newPasswordConfirm) {
-      setPasswordError("새 비밀번호가 서로 일치하지 않아요.");
-      return;
-    }
-    if (!userEmail) return;
-
-    setPasswordSaving(true);
-    const { error: reauthError } = await supabase.auth.signInWithPassword({
-      email: userEmail,
-      password: currentPassword,
-    });
-    if (reauthError) {
-      setPasswordSaving(false);
-      setPasswordError("현재 비밀번호가 일치하지 않아요.");
-      return;
-    }
-
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-    setPasswordSaving(false);
-    if (updateError) {
-      setPasswordError("비밀번호 변경에 실패했어요.");
-      return;
-    }
-    setCurrentPassword("");
-    setNewPassword("");
-    setNewPasswordConfirm("");
-    setChangingPassword(false);
-    setPasswordDone(true);
-  }
-
-  return (
-    <section className="mt-6 rounded-2xl border border-brand-100 bg-white p-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-lg font-bold text-brand-700">{profile.name}</p>
-          <p className="text-xs text-brand-500">
-            {profile.student_id} · {departmentLabel(profile.department)}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setEditing((v) => !v)}
-            className="rounded-full bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-200"
-          >
-            프로필 수정
-          </button>
-          <button
-            onClick={() => {
-              setChangingPassword((v) => !v);
-              setPasswordDone(false);
-            }}
-            className="rounded-full bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-200"
-          >
-            비밀번호 변경
-          </button>
-        </div>
-      </div>
-
-      {!editing && (
-        <p className="mt-3 text-sm text-brand-500">
-          {profile.college || "단과대 미입력"} · {profile.major || "학과 미입력"}
-        </p>
-      )}
-
-      {editing && (
-        <div className="mt-4 space-y-3">
-          <Field label="단과대">
-            <input value={college} onChange={(e) => setCollege(e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="학과">
-            <input value={major} onChange={(e) => setMajor(e.target.value)} className={inputClass} />
-          </Field>
-          <button
-            onClick={handleProfileSave}
-            disabled={saving}
-            className="rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
-          >
-            {saving ? "저장 중..." : "저장하기"}
-          </button>
-        </div>
-      )}
-
-      {changingPassword && (
-        <div className="mt-4 space-y-3 border-t border-brand-100 pt-4">
-          <Field label="현재 비밀번호">
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="새 비밀번호">
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder={CREDENTIAL_FORMAT_HINT}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="새 비밀번호 확인">
-            <input
-              type="password"
-              value={newPasswordConfirm}
-              onChange={(e) => setNewPasswordConfirm(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          {passwordError && <p className="text-xs text-red-600">{passwordError}</p>}
-          <button
-            onClick={handlePasswordSave}
-            disabled={passwordSaving}
-            className="rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
-          >
-            {passwordSaving ? "변경 중..." : "비밀번호 변경하기"}
-          </button>
-        </div>
-      )}
-      {passwordDone && <p className="mt-3 text-xs text-accent-700">비밀번호가 변경됐어요.</p>}
-    </section>
   );
 }

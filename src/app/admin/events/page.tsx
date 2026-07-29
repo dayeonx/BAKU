@@ -1,10 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
-import { categoryLabel, categoryColor } from "@/lib/eventCategories";
+import { EVENT_CATEGORIES, categoryLabel, categoryColor } from "@/lib/eventCategories";
+import EventRegisterForm from "@/components/EventRegisterForm";
+
+const OFFICER_CATEGORIES = EVENT_CATEGORIES.filter((c) => c.value !== "free");
 
 const STATUS_TABS: { value: "pending" | "approved" | "rejected"; label: string }[] = [
   { value: "pending", label: "승인 대기" },
@@ -21,7 +23,8 @@ type EventRow = {
   items: string | null;
   status: "pending" | "approved" | "rejected";
   signup_method: "in_app_auto" | "manual" | "none";
-  host_name: string;
+  host_name: string | null;
+  host_account_name: string;
 };
 
 export default function AdminEventsPage() {
@@ -31,6 +34,7 @@ export default function AdminEventsPage() {
   const [tab, setTab] = useState<"pending" | "approved" | "rejected">("pending");
   const [events, setEvents] = useState<EventRow[]>([]);
   const [openParticipantsFor, setOpenParticipantsFor] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -50,13 +54,13 @@ export default function AdminEventsPage() {
       const { data } = await supabase
         .from("events")
         .select(
-          "id, category, event_date, end_date, location, items, status, signup_method, profiles!events_created_by_fkey(name)",
+          "id, category, event_date, end_date, location, items, status, signup_method, host_name, profiles!events_created_by_fkey(name)",
         )
         .order("event_date", { ascending: false });
       setEvents(
         (data ?? []).map((e) => {
           const p = e.profiles as unknown as { name: string } | null;
-          return { ...e, host_name: p?.name ?? "-" };
+          return { ...e, host_account_name: p?.name ?? "-" };
         }),
       );
     }
@@ -95,13 +99,25 @@ export default function AdminEventsPage() {
             전체 행사를 상태별로 확인하고 승인·거절하거나, 참여자 명단을 엑셀로 등록할 수 있어요.
           </p>
         </div>
-        <Link
-          href="/calendar"
+        <button
+          onClick={() => setShowForm((v) => !v)}
           className="rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700"
         >
-          캘린더에서 새 일정 등록하기 →
-        </Link>
+          {showForm ? "닫기" : "+ 새 일정 등록"}
+        </button>
       </div>
+
+      {showForm && (
+        <EventRegisterForm
+          categories={OFFICER_CATEGORIES}
+          autoApprove
+          onClose={() => setShowForm(false)}
+          onCreated={() => {
+            setShowForm(false);
+            load();
+          }}
+        />
+      )}
 
       <div className="mt-6 flex gap-2">
         {STATUS_TABS.map((s) => (
@@ -132,7 +148,9 @@ export default function AdminEventsPage() {
                     {e.end_date && e.end_date !== e.event_date ? ` ~ ${e.end_date}` : ""} · {e.location}
                     {e.items ? ` · ${e.items}` : ""}
                   </span>
-                  <span className="text-xs text-brand-300">주최자 {e.host_name}</span>
+                  <span className="text-xs text-brand-300">
+                    주최자 {e.host_name || e.host_account_name}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   {e.signup_method === "manual" && e.status === "approved" && (

@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { departmentLabel } from "@/lib/departments";
 import LogoutButton from "./LogoutButton";
-import AdminMenu from "./AdminMenu";
 import NotificationBell from "./NotificationBell";
+import AccountDrawer from "./AccountDrawer";
 
 const NAV_LINKS = [
   { href: "/", label: "메인 홈" },
@@ -19,12 +18,18 @@ export default async function Header() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let profile: { name: string; department: string } | null = null;
+  let profile: {
+    name: string;
+    department: string;
+    student_id: string;
+    college: string | null;
+    major: string | null;
+  } | null = null;
   let isOfficer = false;
   if (user) {
     const { data } = await supabase
       .from("profiles")
-      .select("name, department, status")
+      .select("name, department, status, student_id, college, major")
       .eq("id", user.id)
       .single();
     profile = data;
@@ -53,17 +58,27 @@ export default async function Header() {
               {link.label}
             </Link>
           ))}
-          {isOfficer && <AdminMenu />}
+          {isOfficer && (
+            <Link
+              href="/admin"
+              className="text-sm font-medium text-brand-700 transition-colors hover:text-accent-500"
+            >
+              관리자
+            </Link>
+          )}
         </nav>
 
-        {profile ? (
+        {profile && user ? (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-brand-700">
-              {profile.name}
-              <span className="ml-1 font-normal text-brand-300">
-                {departmentLabel(profile.department)}
-              </span>
-            </span>
+            <AccountDrawer
+              userId={user.id}
+              userEmail={user.email ?? null}
+              name={profile.name}
+              department={profile.department}
+              studentId={profile.student_id}
+              college={profile.college}
+              major={profile.major}
+            />
             <NotificationBell />
             <LogoutButton />
           </div>
