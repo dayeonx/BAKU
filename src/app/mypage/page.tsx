@@ -651,7 +651,7 @@ function SettlementForm({
     const studioPath = `studio/${eventId}/${Date.now()}-${studioFile.name}`;
     const { error: studioUploadError } = await supabase.storage.from("settlements").upload(studioPath, studioFile);
     if (studioUploadError) {
-      setError("스튜디오 영수증 업로드에 실패했어요.");
+      setError(`스튜디오 영수증 업로드에 실패했어요: ${studioUploadError.message}`);
       setSaving(false);
       return;
     }
@@ -663,7 +663,7 @@ function SettlementForm({
         .from("settlements")
         .upload(materialsPath, materialsFile);
       if (materialsUploadError) {
-        setError("재료 영수증 업로드에 실패했어요.");
+        setError(`재료 영수증 업로드에 실패했어요: ${materialsUploadError.message}`);
         setSaving(false);
         return;
       }
@@ -685,7 +685,7 @@ function SettlementForm({
 
     if (insertError || !created) {
       setSaving(false);
-      setError("정산 등록에 실패했어요.");
+      setError(`정산 등록에 실패했어요: ${insertError?.message ?? "알 수 없는 오류"}`);
       return;
     }
 
@@ -693,9 +693,13 @@ function SettlementForm({
     if (coHosted) {
       hostRows.push({ settlement_id: created.id, name: host2Name.trim(), account: host2Account.trim() });
     }
-    await supabase.from("settlement_hosts").insert(hostRows);
+    const { error: hostsError } = await supabase.from("settlement_hosts").insert(hostRows);
 
     setSaving(false);
+    if (hostsError) {
+      setError(`주최자 정보 등록에 실패했어요: ${hostsError.message}`);
+      return;
+    }
     onDone();
   }
 
