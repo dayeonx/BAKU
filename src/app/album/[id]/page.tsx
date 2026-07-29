@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { categoryLabel, categoryColor } from "@/lib/eventCategories";
 import { isEventOver } from "@/lib/eventTime";
+import { safeFileName } from "@/lib/storagePath";
 
 const BAKING_CATEGORIES = ["regular", "free", "monthly_special"];
 const PARTICIPANT_ONLY_CATEGORIES = ["welcome", "mt", "bread_tour"];
@@ -344,7 +345,7 @@ function PhotoSection({
     setUploading(true);
     setError(null);
     for (const file of Array.from(files)) {
-      const path = `photos/${eventId}/${userId}/${Date.now()}-${file.name}`;
+      const path = `photos/${eventId}/${userId}/${Date.now()}-${safeFileName(file.name)}`;
       const { error: uploadError } = await supabase.storage.from("album").upload(path, file);
       if (uploadError) {
         setError(`업로드 실패: ${uploadError.message}`);
@@ -529,7 +530,7 @@ function RecipeForm({
     let fileName: string | null = null;
 
     if (file) {
-      const path = `recipes/${eventId}/${Date.now()}-${file.name}`;
+      const path = `recipes/${eventId}/${Date.now()}-${safeFileName(file.name)}`;
       const { error: uploadError } = await supabase.storage.from("album").upload(path, file);
       if (uploadError) {
         setSaving(false);

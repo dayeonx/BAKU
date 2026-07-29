@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { inputClass } from "@/components/FormField";
 import DepartmentTaskSummary from "@/components/DepartmentTaskSummary";
+import { safeFileName } from "@/lib/storagePath";
 
 const BOARD_DEPARTMENTS = [
   { value: "president", label: "회장단" },
@@ -683,7 +684,7 @@ function FileAttachments({
     const file = fileInputRef.current?.files?.[0];
     if (!file) return;
     setUploading(true);
-    const path = `${taskId}/${Date.now()}-${file.name}`;
+    const path = `${taskId}/${Date.now()}-${safeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage.from("work-tasks").upload(path, file);
     if (!uploadError) {
       await supabase.from("work_task_files").insert({

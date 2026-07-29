@@ -7,6 +7,7 @@ import { categoryLabel, categoryColor } from "@/lib/eventCategories";
 import { inputClass } from "@/components/FormField";
 import { BAKU_ACCOUNT } from "@/lib/bakuAccount";
 import { isEventOver } from "@/lib/eventTime";
+import { safeFileName } from "@/lib/storagePath";
 
 type EventLite = {
   id: string;
@@ -648,7 +649,7 @@ function SettlementForm({
     setSaving(true);
     setError(null);
 
-    const studioPath = `studio/${eventId}/${Date.now()}-${studioFile.name}`;
+    const studioPath = `studio/${eventId}/${Date.now()}-${safeFileName(studioFile.name)}`;
     const { error: studioUploadError } = await supabase.storage.from("settlements").upload(studioPath, studioFile);
     if (studioUploadError) {
       setError(`스튜디오 영수증 업로드에 실패했어요: ${studioUploadError.message}`);
@@ -658,7 +659,7 @@ function SettlementForm({
 
     let materialsPath: string | null = null;
     if (materialsFile) {
-      materialsPath = `materials/${eventId}/${Date.now()}-${materialsFile.name}`;
+      materialsPath = `materials/${eventId}/${Date.now()}-${safeFileName(materialsFile.name)}`;
       const { error: materialsUploadError } = await supabase.storage
         .from("settlements")
         .upload(materialsPath, materialsFile);
