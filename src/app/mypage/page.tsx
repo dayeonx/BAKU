@@ -16,6 +16,8 @@ type EventLite = {
   end_time: string | null;
   location: string;
   items: string | null;
+  price_range: string | null;
+  host_name: string | null;
   status: string;
 };
 
@@ -24,7 +26,7 @@ type MyEvent = EventLite & { isHost: boolean; isParticipant: boolean };
 type Settlement = {
   id: string;
   event_id: string;
-  host_id: string;
+  host_id: string | null;
   studio_receipt_url: string | null;
   studio_amount: number | null;
   materials_receipt_url: string | null;
@@ -37,11 +39,22 @@ type ReceiptLinks = { studio: string | null; materials: string | null };
 
 type SettlementHost = { id: string; name: string; account: string; reward_amount: number; status: "pending" | "paid" | "not_needed" };
 
-// 정산 시스템은 이 세 종류의 활동에만 적용돼요. 나머지 종류는 별도 정산 방식이 정해지기 전까지 정산 없이 바로 완료 처리해요.
-const SETTLEMENT_CATEGORIES = ["regular", "free", "monthly_special"];
+// 정산 시스템이 적용되는 활동: 주최자가 영수증을 등록하는 베이킹 활동 + 주최자 없이 임원진이 바로 금액을 배정하는 활동
+const BAKING_HOST_CATEGORIES = ["regular", "free", "monthly_special"];
+const HOSTLESS_SETTLEMENT_CATEGORIES = ["welcome", "mt", "bread_tour"];
+const SETTLEMENT_CATEGORIES = [...BAKING_HOST_CATEGORIES, ...HOSTLESS_SETTLEMENT_CATEGORIES];
 
-function toDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// 종료 시각(있으면 분 단위, 없으면 날짜 자정)까지 지나야 활동이 끝난 것으로 판단
+function isEventOver(e: EventLite): boolean {
+  const endDateStr = e.end_date ?? e.event_date;
+  const cutoff = e.end_time ? new Date(`${endDateStr}T${e.end_time}`) : new Date(`${endDateStr}T23:59:59`);
+  return new Date() > cutoff;
+}
+
+function formatTimeRange(e: EventLite): string {
+  if (!e.start_time) return "";
+  if (!e.end_time) return e.start_time.slice(0, 5);
+  return `${e.start_time.slice(0, 5)}~${e.end_time.slice(0, 5)}`;
 }
 
 function cardTitle(e: EventLite): string {
@@ -72,11 +85,15 @@ export default function MyPage() {
     const [{ data: participantRows }, { data: hostedRows }] = await Promise.all([
       supabase
         .from("event_participants")
-        .select("events(id, category, event_date, end_date, start_time, end_time, location, items, status)")
+        .select(
+          "events(id, category, event_date, end_date, start_time, end_time, location, items, price_range, host_name, status)",
+        )
         .eq("profile_id", uid),
       supabase
         .from("events")
-        .select("id, category, event_date, end_date, start_time, end_time, location, items, status")
+        .select(
+          "id, category, event_date, end_date, start_time, end_time, location, items, price_range, host_name, status",
+        )
         .eq("created_by", uid),
     ]);
 
@@ -93,10 +110,7 @@ export default function MyPage() {
     const allEvents = Array.from(merged.values());
     setMyEvents(allEvents);
 
-    const todayKey = toDateKey(new Date());
-    const completedIds = allEvents
-      .filter((e) => (e.end_date ?? e.event_date) < todayKey)
-      .map((e) => e.id);
+    const completedIds = allEvents.filter((e) => isEventOver(e)).map((e) => e.id);
 
     if (completedIds.length > 0) {
       const [{ data: settlementRows }, { data: reviewRows }] = await Promise.all([
@@ -152,10 +166,7 @@ export default function MyPage() {
     );
   }
 
-  const todayKey = toDateKey(new Date());
-  const completed = myEvents
-    .filter((e) => (e.end_date ?? e.event_date) < todayKey)
-    .sort((a, b) => b.event_date.localeCompare(a.event_date));
+  const completed = myEvents.filter((e) => isEventOver(e)).sort((a, b) => b.event_date.localeCompare(a.event_date));
   const needsAttention = completed.filter(
     (e) => SETTLEMENT_CATEGORIES.includes(e.category) && settlements.get(e.id)?.status !== "completed",
   );
@@ -163,10 +174,24 @@ export default function MyPage() {
     (e) => !SETTLEMENT_CATEGORIES.includes(e.category) || settlements.get(e.id)?.status === "completed",
   );
 
+  const upcoming = myEvents
+    .filter((e) => SETTLEMENT_CATEGORIES.includes(e.category) && !isEventOver(e))
+    .filter((e) => (BAKING_HOST_CATEGORIES.includes(e.category) ? e.isHost || e.isParticipant : e.isParticipant))
+    .sort((a, b) => a.event_date.localeCompare(b.event_date));
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold text-brand-700">마이페이지</h1>
       <p className="mt-2 text-sm text-brand-500">내가 주최하거나 참여한 활동의 정산을 처리하고 후기를 남겨보세요.</p>
+
+      {upcoming.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-lg font-bold text-brand-700">예정된 활동</h2>
+          {upcoming.map((e) => (
+            <UpcomingActivityCard key={e.id} event={e} supabase={supabase} />
+          ))}
+        </section>
+      )}
 
       <section className="mt-8">
         {needsAttention.length === 0 ? (
@@ -196,6 +221,59 @@ export default function MyPage() {
   );
 }
 
+function UpcomingActivityCard({
+  event,
+  supabase,
+}: {
+  event: MyEvent;
+  supabase: ReturnType<typeof createClient>;
+}) {
+  const [participantNames, setParticipantNames] = useState<string[] | null>(null);
+  const isBaking = BAKING_HOST_CATEGORIES.includes(event.category);
+  const showAsHost = isBaking && event.isHost;
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.rpc("album_participants", { p_event_id: event.id });
+      setParticipantNames(((data ?? []) as { name: string }[]).map((p) => p.name));
+    })();
+  }, [event.id, supabase]);
+
+  return (
+    <div className="mb-4 rounded-2xl border border-accent-200 bg-accent-50/40 p-5 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-lg font-extrabold text-brand-700">&lt;{cardTitle(event)}&gt;</span>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-accent-700">예정된 활동</span>
+      </div>
+
+      <div className="mt-3 space-y-1 text-sm text-brand-700">
+        <p>
+          날짜: {event.event_date}
+          {event.end_date && event.end_date !== event.event_date ? ` ~ ${event.end_date}` : ""}
+        </p>
+        {formatTimeRange(event) && <p>시간: {formatTimeRange(event)}</p>}
+        {isBaking && event.host_name && <p>주최자: {event.host_name}</p>}
+        {event.items && <p>품목: {event.items}</p>}
+        {event.price_range && <p>예상 가격대: {event.price_range}</p>}
+        <p className="font-semibold text-accent-700">
+          {showAsHost ? "본인이 주최자입니다" : "본인이 참여자입니다"}
+        </p>
+      </div>
+
+      <div className="mt-3 border-t border-accent-100 pt-3 text-xs text-brand-500">
+        <p className="font-semibold text-brand-700">참여자 명단</p>
+        {participantNames === null ? (
+          <p className="mt-1 text-brand-300">불러오는 중...</p>
+        ) : participantNames.length === 0 ? (
+          <p className="mt-1 text-brand-300">아직 참여자가 없어요.</p>
+        ) : (
+          <p className="mt-1">{participantNames.join(", ")}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SettlementBigCard({
   event,
   settlement,
@@ -215,9 +293,10 @@ function SettlementBigCard({
   supabase: ReturnType<typeof createClient>;
   onDone: () => void;
 }) {
+  const showHostSection = isHost && BAKING_HOST_CATEGORIES.includes(event.category);
   const title = cardTitle(event);
   const statusTag = !settlement
-    ? isHost
+    ? showHostSection
       ? "정산 등록"
       : "정산 대기중"
     : settlement.status === "submitted"
@@ -236,7 +315,7 @@ function SettlementBigCard({
       </p>
 
       <div className="mt-4 space-y-4">
-        {isHost && (
+        {showHostSection && (
           <HostSettlementSection
             eventId={event.id}
             settlement={settlement}
@@ -247,7 +326,7 @@ function SettlementBigCard({
           />
         )}
         {isParticipant && (
-          <div className={isHost ? "border-t border-brand-100 pt-4" : ""}>
+          <div className={showHostSection ? "border-t border-brand-100 pt-4" : ""}>
             <ParticipantSettlementSection settlement={settlement} userId={userId} supabase={supabase} onDone={onDone} />
           </div>
         )}
@@ -277,9 +356,9 @@ function HostSettlementSection({
   supabase: ReturnType<typeof createClient>;
   onDone: () => void;
 }) {
-  const [participants, setParticipants] = useState<{ id: string; name: string; amount: number; paid: boolean }[] | null>(
-    null,
-  );
+  const [participants, setParticipants] = useState<
+    { id: string; name: string; amount: number; paid: boolean; selfReportedPaid: boolean }[] | null
+  >(null);
   const [hosts, setHosts] = useState<SettlementHost[] | null>(null);
 
   useEffect(() => {
@@ -298,12 +377,12 @@ function HostSettlementSection({
     (async () => {
       const { data } = await supabase
         .from("settlement_participants")
-        .select("id, amount, paid, profiles(name)")
+        .select("id, amount, paid, self_reported_paid, profiles(name)")
         .eq("settlement_id", settlement.id);
       setParticipants(
         (data ?? []).map((r) => {
           const p = r.profiles as unknown as { name: string } | null;
-          return { id: r.id, amount: r.amount, paid: r.paid, name: p?.name ?? "-" };
+          return { id: r.id, amount: r.amount, paid: r.paid, selfReportedPaid: r.self_reported_paid, name: p?.name ?? "-" };
         }),
       );
     })();
@@ -354,7 +433,7 @@ function HostSettlementSection({
                   {p.name} · {p.amount.toLocaleString()}원
                 </span>
                 <span className={p.paid ? "font-semibold text-accent-700" : "text-brand-300"}>
-                  {p.paid ? "입금 완료" : "입금 대기중"}
+                  {p.paid ? "입금 완료" : p.selfReportedPaid ? "입금 확인중" : "입금 대기중"}
                 </span>
               </div>
             ))
@@ -396,7 +475,9 @@ function ParticipantSettlementSection({
   onDone: () => void;
 }) {
   const [mine, setMine] = useState<
-    { id: string; amount: number; paid: boolean; couponReason: string | null } | null | undefined
+    | { id: string; amount: number; paid: boolean; selfReportedPaid: boolean; couponReason: string | null }
+    | null
+    | undefined
   >(undefined);
   const [confirming, setConfirming] = useState(false);
   const [myCoupons, setMyCoupons] = useState<{ id: string; reason: string; max_amount: number | null }[]>([]);
@@ -411,7 +492,7 @@ function ParticipantSettlementSection({
     (async () => {
       const { data } = await supabase
         .from("settlement_participants")
-        .select("id, amount, paid, coupons(reason)")
+        .select("id, amount, paid, self_reported_paid, coupons(reason)")
         .eq("settlement_id", settlement.id)
         .eq("profile_id", userId)
         .maybeSingle();
@@ -420,7 +501,13 @@ function ParticipantSettlementSection({
         return;
       }
       const coupon = data.coupons as unknown as { reason: string } | null;
-      setMine({ id: data.id, amount: data.amount, paid: data.paid, couponReason: coupon?.reason ?? null });
+      setMine({
+        id: data.id,
+        amount: data.amount,
+        paid: data.paid,
+        selfReportedPaid: data.self_reported_paid,
+        couponReason: coupon?.reason ?? null,
+      });
 
       const { data: couponRows } = await supabase
         .from("coupons")
@@ -468,8 +555,10 @@ function ParticipantSettlementSection({
           {mine.couponReason && <span className="ml-2 text-xs text-accent-700">쿠폰 적용됨 ({mine.couponReason})</span>}
         </span>
         {mine.paid ? (
+          <span className="rounded-full bg-accent-500 px-3 py-1 text-xs font-semibold text-white">입금 완료</span>
+        ) : mine.selfReportedPaid ? (
           <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-500">
-            입금 완료 · 임원진 확인 대기중
+            입금 확인중 · 임원진 확인 대기중
           </span>
         ) : confirming ? (
           <span className="flex items-center gap-1.5 text-xs">
