@@ -338,23 +338,30 @@ function PhotoSection({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleUpload() {
     const files = fileInputRef.current?.files;
     if (!files || files.length === 0 || !userId) return;
 
     setUploading(true);
+    setError(null);
     for (const file of Array.from(files)) {
       const path = `photos/${eventId}/${userId}/${Date.now()}-${file.name}`;
       const { error: uploadError } = await supabase.storage.from("album").upload(path, file);
-      if (!uploadError) {
-        const { data } = supabase.storage.from("album").getPublicUrl(path);
-        await supabase.from("album_photos").insert({
-          event_id: eventId,
-          uploaded_by: userId,
-          photo_url: data.publicUrl,
-          photo_type: photoType,
-        });
+      if (uploadError) {
+        setError(`업로드 실패: ${uploadError.message}`);
+        continue;
+      }
+      const { data } = supabase.storage.from("album").getPublicUrl(path);
+      const { error: insertError } = await supabase.from("album_photos").insert({
+        event_id: eventId,
+        uploaded_by: userId,
+        photo_url: data.publicUrl,
+        photo_type: photoType,
+      });
+      if (insertError) {
+        setError(`저장 실패: ${insertError.message}`);
       }
     }
     setUploading(false);
@@ -363,12 +370,20 @@ function PhotoSection({
   }
 
   async function handleDelete(photoId: string) {
-    await supabase.from("album_photos").delete().eq("id", photoId);
+    const { error: deleteError } = await supabase.from("album_photos").delete().eq("id", photoId);
+    if (deleteError) {
+      setError(`삭제 실패: ${deleteError.message}`);
+      return;
+    }
     onDone();
   }
 
   async function handleSetCover(url: string) {
-    await supabase.rpc("set_cover_photo", { p_event_id: eventId, p_photo_url: url });
+    const { error: rpcError } = await supabase.rpc("set_cover_photo", { p_event_id: eventId, p_photo_url: url });
+    if (rpcError) {
+      setError(`대표 사진 설정 실패: ${rpcError.message}`);
+      return;
+    }
     onDone();
   }
 
@@ -409,15 +424,18 @@ function PhotoSection({
       )}
 
       {canManage && (
-        <div className="mt-3 flex items-center gap-3">
-          <input ref={fileInputRef} type="file" accept="image/*" multiple className="text-sm" />
-          <button
-            onClick={handleUpload}
-            disabled={uploading}
-            className="shrink-0 rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
-          >
-            {uploading ? "업로드 중..." : "사진 등록"}
-          </button>
+        <div className="mt-3">
+          <div className="flex items-center gap-3">
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="text-sm" />
+            <button
+              onClick={handleUpload}
+              disabled={uploading}
+              className="shrink-0 rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
+            >
+              {uploading ? "업로드 중..." : "사진 등록"}
+            </button>
+          </div>
+          {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         </div>
       )}
     </section>
@@ -439,13 +457,15 @@ function ReviewForm({
 }) {
   const [text, setText] = useState(existing?.review_text ?? "");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const tooShort = text.trim().length < 100;
 
   async function handleSubmit() {
     if (tooShort) return;
     setSaving(true);
+    setError(null);
 
-    await supabase
+    const { error: upsertError } = await supabase
       .from("album_reviews")
       .upsert(
         { event_id: eventId, profile_id: userId, review_text: text.trim() },
@@ -453,6 +473,10 @@ function ReviewForm({
       );
 
     setSaving(false);
+    if (upsertError) {
+      setError(`저장 실패: ${upsertError.message}`);
+      return;
+    }
     onDone();
   }
 
@@ -476,6 +500,7 @@ function ReviewForm({
       >
         {saving ? "저장 중..." : "저장하기"}
       </button>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -494,6 +519,7 @@ function RecipeForm({
   const [title, setTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleSubmit() {
@@ -501,20 +527,24 @@ function RecipeForm({
     if (!title.trim() || (!file && !linkUrl.trim())) return;
 
     setSaving(true);
+    setError(null);
     let fileUrl: string | null = null;
     let fileName: string | null = null;
 
     if (file) {
       const path = `recipes/${eventId}/${Date.now()}-${file.name}`;
       const { error: uploadError } = await supabase.storage.from("album").upload(path, file);
-      if (!uploadError) {
-        const { data } = supabase.storage.from("album").getPublicUrl(path);
-        fileUrl = data.publicUrl;
-        fileName = file.name;
+      if (uploadError) {
+        setSaving(false);
+        setError(`업로드 실패: ${uploadError.message}`);
+        return;
       }
+      const { data } = supabase.storage.from("album").getPublicUrl(path);
+      fileUrl = data.publicUrl;
+      fileName = file.name;
     }
 
-    await supabase.from("album_recipes").insert({
+    const { error: insertError } = await supabase.from("album_recipes").insert({
       event_id: eventId,
       uploaded_by: userId,
       title: title.trim(),
@@ -524,6 +554,10 @@ function RecipeForm({
     });
 
     setSaving(false);
+    if (insertError) {
+      setError(`저장 실패: ${insertError.message}`);
+      return;
+    }
     setTitle("");
     setLinkUrl("");
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -555,6 +589,7 @@ function RecipeForm({
       >
         {saving ? "등록 중..." : "등록하기"}
       </button>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

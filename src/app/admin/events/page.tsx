@@ -245,7 +245,7 @@ function ParticipantUploadPanel({
       });
 
       if (error) {
-        skipped.push({ row: label, reason: "등록 실패" });
+        skipped.push({ row: label, reason: `등록 실패: ${error.message}` });
         continue;
       }
 
