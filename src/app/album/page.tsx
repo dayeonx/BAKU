@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { categoryLabel } from "@/lib/eventCategories";
 import { semesterLabel, currentSemesterLabel } from "@/lib/semester";
+import { isEventOver } from "@/lib/eventTime";
 
 const BAKING_CATEGORIES = ["regular", "free", "monthly_special"];
 const PAST_SEMESTERS_PREVIEW = 3;
@@ -72,10 +73,10 @@ export default function AlbumPage() {
           "id, category, event_date, end_date, location, items, price_range, start_time, end_time, cover_photo_url",
         )
         .eq("status", "approved")
-        .lt("event_date", todayKey)
+        .lte("event_date", todayKey)
         .order("event_date", { ascending: false });
 
-      const finished = (data ?? []).filter((e) => (e.end_date ?? e.event_date) < todayKey);
+      const finished = (data ?? []).filter((e) => isEventOver(e));
       setEvents(finished);
       setSelectedSemester(currentSemesterLabel());
       setLoading(false);

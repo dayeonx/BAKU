@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { categoryLabel, categoryColor } from "@/lib/eventCategories";
+import { isEventOver } from "@/lib/eventTime";
 
 const BAKING_CATEGORIES = ["regular", "free", "monthly_special"];
 const PARTICIPANT_ONLY_CATEGORIES = ["welcome", "mt", "bread_tour"];
@@ -50,10 +51,6 @@ type Photo = {
   photo_url: string;
   created_at: string;
 };
-
-function toDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 export default function AlbumDetailPage() {
   const params = useParams<{ id: string }>();
@@ -136,7 +133,7 @@ export default function AlbumDetailPage() {
 
   const isHost = hosts.some((h) => h.profile_id === userId);
   const isFinished =
-    !!event && event.status === "approved" && (event.end_date ?? event.event_date) < toDateKey(new Date());
+    !!event && event.status === "approved" && isEventOver(event);
   const myReview = reviews.find((r) => r.profile_id === userId);
 
   if (loading) {

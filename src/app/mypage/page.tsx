@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { categoryLabel, categoryColor } from "@/lib/eventCategories";
 import { inputClass } from "@/components/FormField";
 import { BAKU_ACCOUNT } from "@/lib/bakuAccount";
+import { isEventOver } from "@/lib/eventTime";
 
 type EventLite = {
   id: string;
@@ -43,13 +44,6 @@ type SettlementHost = { id: string; name: string; account: string; reward_amount
 const BAKING_HOST_CATEGORIES = ["regular", "free", "monthly_special"];
 const HOSTLESS_SETTLEMENT_CATEGORIES = ["welcome", "mt", "bread_tour"];
 const SETTLEMENT_CATEGORIES = [...BAKING_HOST_CATEGORIES, ...HOSTLESS_SETTLEMENT_CATEGORIES];
-
-// 종료 시각(있으면 분 단위, 없으면 날짜 자정)까지 지나야 활동이 끝난 것으로 판단
-function isEventOver(e: EventLite): boolean {
-  const endDateStr = e.end_date ?? e.event_date;
-  const cutoff = e.end_time ? new Date(`${endDateStr}T${e.end_time}`) : new Date(`${endDateStr}T23:59:59`);
-  return new Date() > cutoff;
-}
 
 function formatTimeRange(e: EventLite): string {
   if (!e.start_time) return "";
