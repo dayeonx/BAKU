@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 const notoSansKr = Noto_Sans_KR({
   variable: "--font-noto-kr",
@@ -13,6 +14,15 @@ const notoSansKr = Noto_Sans_KR({
 export const metadata: Metadata = {
   title: "BAKU | 고려대학교 제과제빵동아리",
   description: "고려대학교 유일 제과제빵동아리 BAKU 공식 홈페이지",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "BAKU",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#e0791f",
 };
 
 export default function RootLayout({
@@ -23,6 +33,7 @@ export default function RootLayout({
   return (
     <html lang="ko" className={`${notoSansKr.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-cream text-foreground">
+        <ServiceWorkerRegister />
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />
