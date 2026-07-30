@@ -3,14 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "./LogoutButton";
 import NotificationBell from "./NotificationBell";
 import AccountDrawer from "./AccountDrawer";
-
-const NAV_LINKS = [
-  { href: "/", label: "메인 홈" },
-  { href: "/calendar", label: "캘린더" },
-  { href: "/album", label: "앨범" },
-  { href: "/guide", label: "운영규칙/FAQ" },
-  { href: "/mypage", label: "마이페이지" },
-];
+import MobileNav from "./MobileNav";
+import { NAV_LINKS } from "@/lib/navLinks";
 
 export default async function Header() {
   const supabase = await createClient();
@@ -68,28 +62,31 @@ export default async function Header() {
           )}
         </nav>
 
-        {profile && user ? (
-          <div className="flex items-center gap-2">
-            <AccountDrawer
-              userId={user.id}
-              userEmail={user.email ?? null}
-              name={profile.name}
-              department={profile.department}
-              studentId={profile.student_id}
-              college={profile.college}
-              major={profile.major}
-            />
-            <NotificationBell />
-            <LogoutButton />
-          </div>
-        ) : (
-          <Link
-            href="/login"
-            className="rounded-full bg-accent-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-700"
-          >
-            로그인
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {profile && user ? (
+            <>
+              <AccountDrawer
+                userId={user.id}
+                userEmail={user.email ?? null}
+                name={profile.name}
+                department={profile.department}
+                studentId={profile.student_id}
+                college={profile.college}
+                major={profile.major}
+              />
+              <NotificationBell />
+              <LogoutButton />
+            </>
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-full bg-accent-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-700"
+            >
+              로그인
+            </Link>
+          )}
+          <MobileNav isOfficer={isOfficer} />
+        </div>
       </div>
     </header>
   );
