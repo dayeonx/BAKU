@@ -6,6 +6,7 @@ import { categoryLabel } from "@/lib/eventCategories";
 import { inputClass } from "@/components/FormField";
 
 const SETTLEMENT_SUBSIDY = 10000;
+const BAKING_CATEGORIES = ["regular", "free", "monthly_special"];
 
 type AdminSettlement = {
   id: string;
@@ -70,16 +71,23 @@ export default function AdminSettlementsPage() {
       </p>
 
       <section className="mt-6">
-        <h2 className="mb-3 text-lg font-bold text-brand-700">주최자 없는 활동 정산 등록</h2>
+        <h2 className="mb-3 text-lg font-bold text-brand-700">베이킹 활동 정산 처리</h2>
         <p className="mb-3 text-xs text-brand-500">
-          신환회·엠티·빵지순례는 주최자가 없으니 영수증 없이 참여자별 금액을 바로 입력해 등록해요.
+          정기주최·자유주최·월별 스페셜 베이킹의 주최자 등록 정산을 확인하고 배정해요.
         </p>
-        <HostlessSettlementSection supabase={supabase} />
+        <OfficerSettlementSection supabase={supabase} baking={true} />
       </section>
 
       <section className="mt-10">
-        <h2 className="mb-3 text-lg font-bold text-brand-700">정산 처리가 필요한 활동</h2>
-        <OfficerSettlementSection supabase={supabase} />
+        <h2 className="mb-3 text-lg font-bold text-brand-700">기타 활동 정산 등록</h2>
+        <p className="mb-3 text-xs text-brand-500">
+          신환회·엠티·빵지순례 등 주최자가 없는 활동은 물론, 그 밖의 어떤 활동이든 임원진이 직접 참여자를 지정해
+          정산을 등록할 수 있어요.
+        </p>
+        <ManualSettlementSection supabase={supabase} />
+        <div className="mt-6">
+          <OfficerSettlementSection supabase={supabase} baking={false} />
+        </div>
       </section>
 
       <section className="mt-10">
@@ -92,38 +100,37 @@ export default function AdminSettlementsPage() {
 
 type ReceiptLinks = { studio: string | null; materials: string | null };
 
-// 주최자 없이 임원진이 바로 정산금액을 배정하는 활동
-const HOSTLESS_CATEGORIES = ["welcome", "mt", "bread_tour"];
-
-type HostlessEvent = {
+// 임원진이 카테고리 상관없이 어떤 활동이든 직접 참여자를 지정해 정산을 등록하는 기능
+type UnsettledEvent = {
   id: string;
   category: string;
   event_date: string;
   end_date: string | null;
+  end_time: string | null;
   location: string;
 };
 
-function isHostlessEventOver(e: HostlessEvent): boolean {
+function isEventOverForSettlement(e: UnsettledEvent): boolean {
   const endDateStr = e.end_date ?? e.event_date;
-  return new Date() > new Date(`${endDateStr}T23:59:59`);
+  const cutoff = e.end_time ? new Date(`${endDateStr}T${e.end_time}`) : new Date(`${endDateStr}T23:59:59`);
+  return new Date() > cutoff;
 }
 
-function HostlessSettlementSection({ supabase }: { supabase: ReturnType<typeof createClient> }) {
+function ManualSettlementSection({ supabase }: { supabase: ReturnType<typeof createClient> }) {
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<HostlessEvent[]>([]);
+  const [events, setEvents] = useState<UnsettledEvent[]>([]);
 
   const load = useCallback(async () => {
     const [{ data: eventRows }, { data: settlementRows }] = await Promise.all([
       supabase
         .from("events")
-        .select("id, category, event_date, end_date, location")
-        .eq("status", "approved")
-        .in("category", HOSTLESS_CATEGORIES),
+        .select("id, category, event_date, end_date, end_time, location")
+        .eq("status", "approved"),
       supabase.from("settlements").select("event_id"),
     ]);
     const settledIds = new Set((settlementRows ?? []).map((s) => s.event_id));
-    const rows = (eventRows ?? []).filter((e) => !settledIds.has(e.id) && isHostlessEventOver(e));
-    setItems(rows);
+    const rows = (eventRows ?? []).filter((e) => !settledIds.has(e.id) && isEventOverForSettlement(e));
+    setEvents(rows);
     setLoading(false);
   }, [supabase]);
 
@@ -134,55 +141,82 @@ function HostlessSettlementSection({ supabase }: { supabase: ReturnType<typeof c
   if (loading) {
     return <p className="text-sm text-brand-300">불러오는 중...</p>;
   }
-  if (items.length === 0) {
-    return <p className="text-sm text-brand-300">정산 등록이 필요한 활동이 없어요.</p>;
+  if (events.length === 0) {
+    return <p className="text-sm text-brand-300">정산 등록이 필요한 새 활동이 없어요.</p>;
   }
 
   return (
-    <ul className="space-y-4">
-      {items.map((e) => (
-        <HostlessSettlementCard key={e.id} event={e} supabase={supabase} onDone={load} />
-      ))}
-    </ul>
+    <div className="rounded-2xl border border-brand-100 bg-white p-4">
+      <ManualSettlementForm events={events} supabase={supabase} onDone={load} />
+    </div>
   );
 }
 
-function HostlessSettlementCard({
-  event,
+function ManualSettlementForm({
+  events,
   supabase,
   onDone,
 }: {
-  event: HostlessEvent;
+  events: UnsettledEvent[];
   supabase: ReturnType<typeof createClient>;
   onDone: () => void;
 }) {
-  const [participants, setParticipants] = useState<{ profile_id: string; name: string; student_id: string }[]>([]);
-  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [eventId, setEventId] = useState(events[0]?.id ?? "");
+  const [participants, setParticipants] = useState<
+    { profile_id: string; name: string; student_id: string; amount: string }[]
+  >([]);
+  const [searchText, setSearchText] = useState("");
+  const [searchResults, setSearchResults] = useState<{ id: string; name: string; student_id: string }[]>([]);
+  const [bulkAmount, setBulkAmount] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from("event_participants")
-        .select("profile_id, profiles(name, student_id)")
-        .eq("event_id", event.id);
-      setParticipants(
-        (data ?? []).map((r) => {
-          const p = r.profiles as unknown as { name: string; student_id: string } | null;
-          return { profile_id: r.profile_id, name: p?.name ?? "-", student_id: p?.student_id ?? "-" };
-        }),
-      );
-    })();
-  }, [event.id, supabase]);
+    setEventId((cur) => (events.some((e) => e.id === cur) ? cur : (events[0]?.id ?? "")));
+  }, [events]);
+
+  async function handleSearch() {
+    if (!searchText.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, name, student_id")
+      .ilike("name", `%${searchText.trim()}%`)
+      .limit(10);
+    setSearchResults(data ?? []);
+  }
+
+  function addParticipant(p: { id: string; name: string; student_id: string }) {
+    if (participants.some((x) => x.profile_id === p.id)) return;
+    setParticipants((prev) => [...prev, { profile_id: p.id, name: p.name, student_id: p.student_id, amount: "" }]);
+    setSearchText("");
+    setSearchResults([]);
+  }
+
+  function removeParticipant(profileId: string) {
+    setParticipants((prev) => prev.filter((p) => p.profile_id !== profileId));
+  }
+
+  function updateAmount(profileId: string, value: string) {
+    const amount = value.replace(/[^0-9]/g, "");
+    setParticipants((prev) => prev.map((p) => (p.profile_id === profileId ? { ...p, amount } : p)));
+  }
+
+  function applyBulkAmount() {
+    if (!bulkAmount) return;
+    setParticipants((prev) => prev.map((p) => ({ ...p, amount: bulkAmount })));
+  }
 
   async function handleSubmit() {
+    if (!eventId || participants.length === 0) return;
     setSaving(true);
     setError(null);
 
     const { data: created, error: insertError } = await supabase
       .from("settlements")
-      .insert({ event_id: event.id, host_id: null, status: "assigned" })
+      .insert({ event_id: eventId, host_id: null, status: "assigned" })
       .select("id")
       .single();
 
@@ -193,12 +227,8 @@ function HostlessSettlementCard({
     }
 
     const rows = participants
-      .filter((p) => Number(amounts[p.profile_id] ?? 0) > 0)
-      .map((p) => ({
-        settlement_id: created.id,
-        profile_id: p.profile_id,
-        amount: Number(amounts[p.profile_id]),
-      }));
+      .filter((p) => Number(p.amount) > 0)
+      .map((p) => ({ settlement_id: created.id, profile_id: p.profile_id, amount: Number(p.amount) }));
 
     if (rows.length > 0) {
       const { error: participantsError } = await supabase.from("settlement_participants").insert(rows);
@@ -210,54 +240,124 @@ function HostlessSettlementCard({
     }
 
     setSaving(false);
+    setParticipants([]);
+    setBulkAmount("");
     onDone();
   }
 
   return (
-    <li className="rounded-2xl border border-brand-100 bg-white p-4 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-semibold text-brand-700">{categoryLabel(event.category)}</span>
-        <span className="text-brand-500">
-          {event.event_date}
-          {event.end_date && event.end_date !== event.event_date ? ` ~ ${event.end_date}` : ""} · {event.location}
-        </span>
+    <div className="space-y-3">
+      <div>
+        <p className="mb-1 text-xs font-bold text-brand-700">활동 선택</p>
+        <select value={eventId} onChange={(e) => setEventId(e.target.value)} className={inputClass}>
+          {events.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.event_date}
+              {e.end_date && e.end_date !== e.event_date ? ` ~ ${e.end_date}` : ""} · {categoryLabel(e.category)} ·{" "}
+              {e.location}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className="mt-3 space-y-2 rounded-xl bg-brand-50 p-3">
-        <p className="text-xs font-bold text-brand-700">참여자별 정산금액 입력</p>
-        {participants.length === 0 ? (
-          <p className="text-xs text-brand-300">참여자가 없어요.</p>
-        ) : (
-          participants.map((p) => (
+      <div>
+        <p className="mb-1 text-xs font-bold text-brand-700">참여자 검색해서 추가</p>
+        <div className="flex gap-2">
+          <input
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSearch();
+              }
+            }}
+            placeholder="이름으로 검색"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={handleSearch}
+            className="shrink-0 rounded-full bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-200"
+          >
+            검색
+          </button>
+        </div>
+        {searchResults.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {searchResults.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => addParticipant(r)}
+                className="rounded-full bg-brand-50 px-2.5 py-1 text-xs text-brand-700 hover:bg-brand-100"
+              >
+                + {r.name} ({r.student_id})
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {participants.length > 0 && (
+        <div className="space-y-2 rounded-xl bg-brand-50 p-3">
+          <div className="flex items-center gap-2">
+            <input
+              value={bulkAmount}
+              onChange={(e) => setBulkAmount(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="전체 동일 금액(원)"
+              className={inputClass}
+            />
+            <button
+              type="button"
+              onClick={applyBulkAmount}
+              className="shrink-0 rounded-full bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-200"
+            >
+              전체 적용
+            </button>
+          </div>
+          {participants.map((p) => (
             <div key={p.profile_id} className="flex flex-wrap items-center gap-2">
               <span className="w-32 shrink-0 text-xs text-brand-700">
                 {p.name} ({p.student_id})
               </span>
               <input
-                value={amounts[p.profile_id] ?? ""}
-                onChange={(e) =>
-                  setAmounts((prev) => ({ ...prev, [p.profile_id]: e.target.value.replace(/[^0-9]/g, "") }))
-                }
+                value={p.amount}
+                onChange={(e) => updateAmount(p.profile_id, e.target.value)}
                 placeholder="금액(원)"
                 className={inputClass}
               />
+              <button
+                type="button"
+                onClick={() => removeParticipant(p.profile_id)}
+                className="text-xs text-brand-300 hover:text-red-600"
+              >
+                삭제
+              </button>
             </div>
-          ))
-        )}
-        {error && <p className="text-xs text-red-600">{error}</p>}
-        <button
-          onClick={handleSubmit}
-          disabled={saving || participants.length === 0}
-          className="rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
-        >
-          {saving ? "등록 중..." : "정산 등록완료"}
-        </button>
-      </div>
-    </li>
+          ))}
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <button
+        onClick={handleSubmit}
+        disabled={saving || !eventId || participants.length === 0}
+        className="rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
+      >
+        {saving ? "등록 중..." : "정산 등록완료"}
+      </button>
+    </div>
   );
 }
 
-function OfficerSettlementSection({ supabase }: { supabase: ReturnType<typeof createClient> }) {
+function OfficerSettlementSection({
+  supabase,
+  baking,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  baking: boolean;
+}) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<AdminSettlement[]>([]);
   const [receiptLinks, setReceiptLinks] = useState<Map<string, ReceiptLinks>>(new Map());
@@ -271,7 +371,9 @@ function OfficerSettlementSection({ supabase }: { supabase: ReturnType<typeof cr
       .in("status", ["submitted", "assigned"])
       .order("created_at", { ascending: true });
 
-    const rows = (data as unknown as AdminSettlement[]) ?? [];
+    const rows = ((data as unknown as AdminSettlement[]) ?? []).filter((s) =>
+      s.events ? BAKING_CATEGORIES.includes(s.events.category) === baking : true,
+    );
     setItems(rows);
 
     const links = await Promise.all(
@@ -292,7 +394,7 @@ function OfficerSettlementSection({ supabase }: { supabase: ReturnType<typeof cr
     );
     setReceiptLinks(new Map(links));
     setLoading(false);
-  }, [supabase]);
+  }, [supabase, baking]);
 
   useEffect(() => {
     load();
@@ -522,7 +624,13 @@ function SettlementAdminCard({
   >([]);
   const [hosts, setHosts] = useState<SettlementHost[]>([]);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [bulkAmount, setBulkAmount] = useState("");
   const [saving, setSaving] = useState(false);
+
+  function applyBulkAmount() {
+    if (!bulkAmount) return;
+    setAmounts(Object.fromEntries(participants.map((p) => [p.profile_id, bulkAmount])));
+  }
 
   useEffect(() => {
     (async () => {
@@ -641,6 +749,23 @@ function SettlementAdminCard({
       {settlement.status === "submitted" && (
         <div className="mt-3 space-y-2 rounded-xl bg-brand-50 p-3">
           <p className="text-xs font-bold text-brand-700">참여자별 정산금액 배정</p>
+          {participants.length > 0 && (
+            <div className="flex items-center gap-2">
+              <input
+                value={bulkAmount}
+                onChange={(e) => setBulkAmount(e.target.value.replace(/[^0-9]/g, ""))}
+                placeholder="전체 동일 금액(원)"
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={applyBulkAmount}
+                className="shrink-0 rounded-full bg-brand-100 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-200"
+              >
+                전체 적용
+              </button>
+            </div>
+          )}
           {participants.length === 0 ? (
             <p className="text-xs text-brand-300">참여자가 없어요.</p>
           ) : (
@@ -686,7 +811,12 @@ function SettlementAdminCard({
             <div key={p.id} className="flex items-center justify-between text-xs text-brand-700">
               <span>
                 {p.name} · {p.amount.toLocaleString()}원
-                {p.couponReason && <span className="ml-1 text-accent-700">(쿠폰 적용: {p.couponReason})</span>}
+                {p.couponReason && (
+                  <span className="ml-1 text-accent-700">
+                    (쿠폰을 사용했습니다. 그래서 쿠폰이 적용된 입금 금액은 {p.amount.toLocaleString()}원입니다 —{" "}
+                    {p.couponReason})
+                  </span>
+                )}
               </span>
               <button
                 onClick={() => togglePaid(p.id, p.paid)}

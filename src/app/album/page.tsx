@@ -21,6 +21,7 @@ type AlbumEvent = {
   start_time: string | null;
   end_time: string | null;
   cover_photo_url: string | null;
+  cover_photo_position: string | null;
 };
 
 function toDateKey(d: Date): string {
@@ -70,7 +71,7 @@ export default function AlbumPage() {
       const { data } = await supabase
         .from("events")
         .select(
-          "id, category, event_date, end_date, location, items, price_range, start_time, end_time, cover_photo_url",
+          "id, category, event_date, end_date, location, items, price_range, start_time, end_time, cover_photo_url, cover_photo_position",
         )
         .eq("status", "approved")
         .lte("event_date", todayKey)
@@ -178,6 +179,7 @@ export default function AlbumPage() {
                       <img
                         src={e.cover_photo_url}
                         alt=""
+                        style={{ objectPosition: e.cover_photo_position ?? "50% 50%" }}
                         className="h-full w-full object-cover transition-transform group-hover:scale-105"
                       />
                     ) : (

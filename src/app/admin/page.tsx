@@ -10,7 +10,7 @@ const ADMIN_SECTIONS = [
   { emoji: "📋", title: "프로젝트별 업무 공유", desc: "프로젝트 단위로 업무 단계를 나누고 진행 상황을 공유해요", href: "/admin/tasks" },
   { emoji: "📁", title: "구글드라이브", desc: "동아리에서 사용하는 자료 링크를 모아둬요", href: "/admin/drive" },
   { emoji: "🗓️", title: "행사 관리", desc: "주최 일정을 승인하고 관리해요", href: "/admin/events" },
-  { emoji: "💰", title: "정산관리", desc: "참여자별 정산 금액을 배정하고 입금을 확인해요", href: "/admin/settlements" },
+  { emoji: "💰", title: "정산 관리", desc: "참여자별 정산 금액을 배정하고 입금을 확인해요", href: "/admin/settlements" },
   { emoji: "🎟️", title: "쿠폰 관리", desc: "회원에게 무료 베이킹 쿠폰을 등록해요", href: "/admin/coupons" },
   { emoji: "👥", title: "회원 관리", desc: "회원 가입 승인과 정보를 관리해요", href: "/admin/members" },
 ];
@@ -57,8 +57,11 @@ export default function AdminHomePage() {
       <h1 className="text-2xl font-extrabold text-brand-700">관리자 페이지</h1>
 
       <section className="mt-8">
-        <h2 className="mb-3 text-lg font-bold text-brand-700">부서별 급한 업무</h2>
-        <DepartmentTaskSummary onSelectTask={(taskId) => router.push(`/admin/tasks?task=${taskId}`)} />
+        <DepartmentTaskSummary
+          onSelectTask={(taskId, projectId) =>
+            router.push(projectId ? `/admin/tasks/${projectId}?task=${taskId}` : "/admin/tasks")
+          }
+        />
       </section>
 
       <section className="mt-10">

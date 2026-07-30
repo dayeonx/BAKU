@@ -177,7 +177,6 @@ export default function MyPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold text-brand-700">마이페이지</h1>
-      <p className="mt-2 text-sm text-brand-500">내가 주최하거나 참여한 활동의 정산을 처리하고 후기를 남겨보세요.</p>
 
       {upcoming.length > 0 && (
         <section className="mt-8">
@@ -225,7 +224,6 @@ function UpcomingActivityCard({
 }) {
   const [participantNames, setParticipantNames] = useState<string[] | null>(null);
   const isBaking = BAKING_HOST_CATEGORIES.includes(event.category);
-  const showAsHost = isBaking && event.isHost;
 
   useEffect(() => {
     (async () => {
@@ -237,22 +235,19 @@ function UpcomingActivityCard({
   return (
     <div className="mb-4 rounded-2xl border border-accent-200 bg-accent-50/40 p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-lg font-extrabold text-brand-700">&lt;{cardTitle(event)}&gt;</span>
+        <span className="text-lg font-extrabold text-brand-700">{cardTitle(event)}</span>
         <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-accent-700">예정된 활동</span>
       </div>
 
       <div className="mt-3 space-y-1 text-sm text-brand-700">
+        {isBaking && event.host_name && <p>주최자: {event.host_name}</p>}
         <p>
           날짜: {event.event_date}
           {event.end_date && event.end_date !== event.event_date ? ` ~ ${event.end_date}` : ""}
         </p>
         {formatTimeRange(event) && <p>시간: {formatTimeRange(event)}</p>}
-        {isBaking && event.host_name && <p>주최자: {event.host_name}</p>}
         {event.items && <p>품목: {event.items}</p>}
         {event.price_range && <p>예상 가격대: {event.price_range}</p>}
-        <p className="font-semibold text-accent-700">
-          {showAsHost ? "본인이 주최자입니다" : "본인이 참여자입니다"}
-        </p>
       </div>
 
       <div className="mt-3 border-t border-accent-100 pt-3 text-xs text-brand-500">
@@ -301,7 +296,7 @@ function SettlementBigCard({
   return (
     <div className="mb-4 rounded-2xl border border-brand-100 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-lg font-extrabold text-brand-700">&lt;{title}&gt;</span>
+        <span className="text-lg font-extrabold text-brand-700">{title}</span>
         <span className="rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700">{statusTag}</span>
       </div>
       <p className="mt-1 text-xs text-brand-500">

@@ -10,9 +10,6 @@ export default function GuidePage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold text-brand-700">운영규칙 / FAQ</h1>
-      <p className="mt-2 text-sm text-brand-500">
-        BAKU를 함께 만들어가는 데 필요한 규칙과 안내를 정리했어요.
-      </p>
 
       <nav className="mt-6 flex flex-wrap gap-2">
         {NAV.map((n) => (

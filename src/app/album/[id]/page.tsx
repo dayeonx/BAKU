@@ -24,6 +24,7 @@ type EventDetail = {
   end_time: string | null;
   status: string;
   cover_photo_url: string | null;
+  cover_photo_position: string | null;
 };
 
 type NameRow = { profile_id: string; name: string };
@@ -69,6 +70,8 @@ export default function AlbumDetailPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [isOfficer, setIsOfficer] = useState(false);
   const [canManage, setCanManage] = useState(false);
+  const [showRecipeForm, setShowRecipeForm] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
 
   const load = useCallback(async () => {
     const { data: userData } = await supabase.auth.getUser();
@@ -87,7 +90,7 @@ export default function AlbumDetailPage() {
     const { data: eventData } = await supabase
       .from("events")
       .select(
-        "id, category, event_date, end_date, location, location_2, items, price_range, start_time, end_time, status, cover_photo_url",
+        "id, category, event_date, end_date, location, location_2, items, price_range, start_time, end_time, status, cover_photo_url, cover_photo_position",
       )
       .eq("id", eventId)
       .maybeSingle();
@@ -171,6 +174,7 @@ export default function AlbumDetailPage() {
         <img
           src={event.cover_photo_url}
           alt=""
+          style={{ objectPosition: event.cover_photo_position ?? "50% 50%" }}
           className="mt-4 aspect-square w-full rounded-2xl object-cover sm:aspect-video"
         />
       )}
@@ -235,13 +239,26 @@ export default function AlbumDetailPage() {
         userId={userId}
         isOfficer={isOfficer}
         coverUrl={event.cover_photo_url}
+        coverPosition={event.cover_photo_position}
         supabase={supabase}
         onDone={load}
       />
 
       {isBaking && (
         <section className="mt-10">
-          <h2 className="text-lg font-bold text-brand-700">레시피</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-brand-700">레시피</h2>
+            {isHost && userId && recipes.length > 0 && (
+              <button
+                onClick={() => setShowRecipeForm((v) => !v)}
+                title="레시피 등록/편집"
+                aria-label="레시피 등록/편집"
+                className="text-brand-300 hover:text-accent-700"
+              >
+                ✏️
+              </button>
+            )}
+          </div>
           {recipes.length === 0 ? (
             <p className="mt-2 text-sm text-brand-300">레시피가 등록되지 않았어요.</p>
           ) : (
@@ -265,8 +282,16 @@ export default function AlbumDetailPage() {
             </ul>
           )}
 
-          {isHost && userId && (
-            <RecipeForm eventId={event.id} userId={userId} supabase={supabase} onDone={load} />
+          {isHost && userId && (recipes.length === 0 || showRecipeForm) && (
+            <RecipeForm
+              eventId={event.id}
+              userId={userId}
+              supabase={supabase}
+              onDone={() => {
+                load();
+                setShowRecipeForm(false);
+              }}
+            />
           )}
         </section>
       )}
@@ -281,6 +306,7 @@ export default function AlbumDetailPage() {
           userId={userId}
           isOfficer={isOfficer}
           coverUrl={null}
+          coverPosition={null}
           supabase={supabase}
           onDone={load}
         />
@@ -294,7 +320,19 @@ export default function AlbumDetailPage() {
           <ul className="mt-2 space-y-4">
             {reviews.map((r) => (
               <li key={r.id} className="rounded-2xl border border-brand-100 bg-white p-4">
-                <p className="text-sm font-semibold text-brand-700">{r.author_name}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-brand-700">{r.author_name}</p>
+                  {r.profile_id === userId && (
+                    <button
+                      onClick={() => setShowReviewForm((v) => !v)}
+                      title="후기 수정"
+                      aria-label="후기 수정"
+                      className="text-brand-300 hover:text-accent-700"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                </div>
                 {r.review_text && (
                   <p className="mt-1 whitespace-pre-wrap break-words text-sm text-brand-500">{r.review_text}</p>
                 )}
@@ -303,8 +341,17 @@ export default function AlbumDetailPage() {
           </ul>
         )}
 
-        {userId && canManage && (
-          <ReviewForm eventId={event.id} userId={userId} existing={myReview} supabase={supabase} onDone={load} />
+        {userId && canManage && (!myReview || showReviewForm) && (
+          <ReviewForm
+            eventId={event.id}
+            userId={userId}
+            existing={myReview}
+            supabase={supabase}
+            onDone={() => {
+              load();
+              setShowReviewForm(false);
+            }}
+          />
         )}
       </section>
     </div>
@@ -320,6 +367,7 @@ function PhotoSection({
   userId,
   isOfficer,
   coverUrl,
+  coverPosition,
   supabase,
   onDone,
 }: {
@@ -331,12 +379,14 @@ function PhotoSection({
   userId: string | null;
   isOfficer: boolean;
   coverUrl: string | null;
+  coverPosition: string | null;
   supabase: ReturnType<typeof createClient>;
   onDone: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [positioningUrl, setPositioningUrl] = useState<string | null>(null);
 
   async function handleUpload() {
     const files = fileInputRef.current?.files;
@@ -376,12 +426,17 @@ function PhotoSection({
     onDone();
   }
 
-  async function handleSetCover(url: string) {
-    const { error: rpcError } = await supabase.rpc("set_cover_photo", { p_event_id: eventId, p_photo_url: url });
+  async function handleSetCover(url: string, position: string) {
+    const { error: rpcError } = await supabase.rpc("set_cover_photo", {
+      p_event_id: eventId,
+      p_photo_url: url,
+      p_position: position,
+    });
     if (rpcError) {
       setError(`대표 사진 설정 실패: ${rpcError.message}`);
       return;
     }
+    setPositioningUrl(null);
     onDone();
   }
 
@@ -391,18 +446,18 @@ function PhotoSection({
       {photos.length === 0 ? (
         <p className="mt-2 text-sm text-brand-300">등록된 사진이 없어요.</p>
       ) : (
-        <div className="mt-3 flex flex-col gap-3">
+        <div className="mt-3 columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-6">
           {photos.map((p) => (
-            <div key={p.id} className="group relative">
+            <div key={p.id} className="group relative mb-3 break-inside-avoid">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.photo_url} alt="" className="h-auto w-full rounded-xl" />
               <div className="absolute inset-x-0 bottom-0 flex items-center justify-between rounded-b-xl bg-black/50 px-2 py-1 text-white opacity-0 transition-opacity group-hover:opacity-100">
                 {photoType === "gallery" && canManage ? (
                   <button
-                    onClick={() => handleSetCover(p.photo_url)}
+                    onClick={() => setPositioningUrl(p.photo_url)}
                     className={`text-[11px] font-semibold ${coverUrl === p.photo_url ? "text-accent-300" : "text-white"}`}
                   >
-                    {coverUrl === p.photo_url ? "대표 사진" : "대표로 설정"}
+                    {coverUrl === p.photo_url ? "대표 사진 · 영역 조정" : "대표로 설정"}
                   </button>
                 ) : (
                   <span />
@@ -436,7 +491,99 @@ function PhotoSection({
           {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         </div>
       )}
+
+      {positioningUrl && (
+        <CoverPositionModal
+          photoUrl={positioningUrl}
+          initialPosition={coverUrl === positioningUrl ? (coverPosition ?? "50% 50%") : "50% 50%"}
+          onCancel={() => setPositioningUrl(null)}
+          onSave={(position) => handleSetCover(positioningUrl, position)}
+        />
+      )}
     </section>
+  );
+}
+
+function CoverPositionModal({
+  photoUrl,
+  initialPosition,
+  onCancel,
+  onSave,
+}: {
+  photoUrl: string;
+  initialPosition: string;
+  onCancel: () => void;
+  onSave: (position: string) => void;
+}) {
+  const [xInit, yInit] = initialPosition.split(" ").map((v) => parseInt(v, 10));
+  const [x, setX] = useState(Number.isFinite(xInit) ? xInit : 50);
+  const [y, setY] = useState(Number.isFinite(yInit) ? yInit : 50);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave(`${x}% ${y}%`);
+    setSaving(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
+      <div
+        className="w-full max-w-sm rounded-2xl bg-white p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-sm font-bold text-brand-700">대표 사진 영역 조정</p>
+        <p className="mt-1 text-xs text-brand-300">앨범 목록에서 정사각형으로 보일 영역을 미리보고 조정하세요.</p>
+        <div className="mt-3 aspect-square w-full overflow-hidden rounded-xl bg-brand-50">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photoUrl}
+            alt=""
+            style={{ objectPosition: `${x}% ${y}%` }}
+            className="h-full w-full object-cover"
+          />
+        </div>
+        <div className="mt-3 space-y-2">
+          <label className="block text-xs text-brand-500">
+            가로 위치
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={x}
+              onChange={(e) => setX(Number(e.target.value))}
+              className="mt-1 w-full"
+            />
+          </label>
+          <label className="block text-xs text-brand-500">
+            세로 위치
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={y}
+              onChange={(e) => setY(Number(e.target.value))}
+              className="mt-1 w-full"
+            />
+          </label>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
+          >
+            {saving ? "저장 중..." : "대표 사진으로 저장"}
+          </button>
+          <button
+            onClick={onCancel}
+            className="rounded-full bg-brand-100 px-4 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-200"
+          >
+            취소
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

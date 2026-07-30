@@ -33,7 +33,6 @@ export default function AdminMembersPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [loading, setLoading] = useState(true);
-  const [isOfficer, setIsOfficer] = useState(false);
   const [isPresident, setIsPresident] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -54,13 +53,10 @@ export default function AdminMembersPage() {
       .eq("id", userData.user.id)
       .single();
 
-    const officer =
-      !!myProfile && myProfile.department !== "member" && myProfile.status === "active";
     const president = !!myProfile && myProfile.department === "president" && myProfile.status === "active";
-    setIsOfficer(officer);
     setIsPresident(president);
 
-    if (officer) {
+    if (president) {
       const { data } = await supabase
         .from("profiles")
         .select("id, student_id, username, name, college, major, department, status, semester_count")
@@ -164,10 +160,10 @@ export default function AdminMembersPage() {
     return <div className="mx-auto max-w-4xl px-4 py-16 text-center text-brand-500">불러오는 중...</div>;
   }
 
-  if (!isOfficer) {
+  if (!isPresident) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-16 text-center text-brand-500">
-        임원진만 접근할 수 있는 페이지입니다.
+        회장단만 접근할 수 있는 페이지입니다.
       </div>
     );
   }
