@@ -83,8 +83,7 @@ export default function AdminDrivePage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
-      <h1 className="text-2xl font-extrabold text-brand-700">구글드라이브</h1>
-      <p className="mt-2 text-sm text-brand-500">동아리에서 사용하는 구글드라이브 폴더·문서 링크를 모아둬요.</p>
+      <h1 className="text-2xl font-extrabold text-brand-700">구글 드라이브</h1>
 
       <div className="mt-6 rounded-2xl border border-brand-100 bg-white p-5">
         <p className="text-sm font-bold text-brand-700">링크 등록</p>

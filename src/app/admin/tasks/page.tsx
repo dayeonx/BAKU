@@ -73,7 +73,7 @@ export default function AdminTasksPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-      <h1 className="text-2xl font-extrabold text-brand-700">업무 관리</h1>
+      <h1 className="text-2xl font-extrabold text-brand-700">부서별 업무</h1>
 
       <div className="mt-6">
         <DepartmentTaskSummary

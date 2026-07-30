@@ -180,7 +180,7 @@ export default function MyPage() {
 
       {upcoming.length > 0 && (
         <section className="mt-8">
-          <h2 className="mb-3 text-lg font-bold text-brand-700">예정된 활동</h2>
+          <h2 className="mb-3 text-lg font-bold text-brand-700">신청 내역</h2>
           {upcoming.map((e) => (
             <UpcomingActivityCard key={e.id} event={e} supabase={supabase} />
           ))}
@@ -208,7 +208,7 @@ export default function MyPage() {
       </section>
 
       <section className="mt-10">
-        <h2 className="mb-3 text-lg font-bold text-brand-700">내가 한 활동</h2>
+        <h2 className="mb-3 text-lg font-bold text-brand-700">지난 활동</h2>
         <FinishedActivityList events={finished} reviewedEventIds={reviewedEventIds} />
       </section>
     </div>
@@ -236,7 +236,7 @@ function UpcomingActivityCard({
     <div className="mb-4 rounded-2xl border border-accent-200 bg-accent-50/40 p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-lg font-extrabold text-brand-700">{cardTitle(event)}</span>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-accent-700">예정된 활동</span>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-accent-700">신청 내역</span>
       </div>
 
       <div className="mt-3 space-y-1 text-sm text-brand-700">
@@ -317,7 +317,13 @@ function SettlementBigCard({
         )}
         {isParticipant && (
           <div className={showHostSection ? "border-t border-brand-100 pt-4" : ""}>
-            <ParticipantSettlementSection settlement={settlement} userId={userId} supabase={supabase} onDone={onDone} />
+            <ParticipantSettlementSection
+              settlement={settlement}
+              userId={userId}
+              supabase={supabase}
+              onDone={onDone}
+              hasHost={BAKING_HOST_CATEGORIES.includes(event.category)}
+            />
           </div>
         )}
       </div>
@@ -458,11 +464,13 @@ function ParticipantSettlementSection({
   userId,
   supabase,
   onDone,
+  hasHost,
 }: {
   settlement: Settlement | undefined;
   userId: string;
   supabase: ReturnType<typeof createClient>;
   onDone: () => void;
+  hasHost: boolean;
 }) {
   const [mine, setMine] = useState<
     | { id: string; amount: number; paid: boolean; selfReportedPaid: boolean; couponReason: string | null }
@@ -524,7 +532,11 @@ function ParticipantSettlementSection({
   }
 
   if (!settlement) {
-    return <p className="text-sm text-brand-300">주최자의 정산 등록을 기다리고 있어요.</p>;
+    return (
+      <p className="text-sm text-brand-300">
+        {hasHost ? "주최자의 정산 등록을 기다리고 있어요." : "정산 등록을 기다리고 있어요."}
+      </p>
+    );
   }
   if (settlement.status === "submitted") {
     return <p className="text-sm text-brand-300">임원진의 금액 배정을 기다리고 있어요.</p>;

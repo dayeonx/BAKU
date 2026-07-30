@@ -95,9 +95,6 @@ export default function AdminEventsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-brand-700">행사 관리</h1>
-          <p className="mt-2 text-sm text-brand-500">
-            전체 행사를 상태별로 확인하고 승인·거절하거나, 참여자 명단을 엑셀로 등록할 수 있어요.
-          </p>
         </div>
         <button
           onClick={() => setShowForm((v) => !v)}

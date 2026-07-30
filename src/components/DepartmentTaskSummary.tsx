@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { departmentLabel } from "@/lib/departments";
+
+const BOARD_DEPARTMENTS = [
+  { value: "president", label: "회장단" },
+  { value: "planning", label: "기획부" },
+  { value: "executive", label: "집행부" },
+  { value: "treasury", label: "총무부" },
+  { value: "pr", label: "홍보부" },
+];
 
 type SummaryTask = {
   id: string;
@@ -57,37 +64,40 @@ export default function DepartmentTaskSummary({
 
   const todayKey = toDateKey(new Date());
 
-  if (!myDepartment) return null;
-
-  const deptTasks = tasks.filter((t) => t.assignees.includes(myDepartment) && t.status !== "done").sort(compareDue);
-
   return (
-    <div className="max-w-sm rounded-2xl border border-brand-100 bg-brand-50/50 p-3">
-      <h2 className="text-sm font-bold text-brand-700">
-        {departmentLabel(myDepartment)} 업무 <span className="font-normal text-brand-300">({deptTasks.length})</span>
-      </h2>
-      <div className="mt-2 space-y-1.5">
-        {deptTasks.length === 0 ? (
-          <p className="px-0.5 text-xs text-brand-300">급한 업무가 없어요.</p>
-        ) : (
-          deptTasks.map((t) => {
-            const overdue = !!t.due_date && t.due_date < todayKey;
-            return (
-              <div
-                key={t.id}
-                onClick={() => onSelectTask(t.id, t.project_id)}
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-white px-1.5 py-1.5 text-xs hover:bg-brand-100"
-              >
-                <CompleteToggle task={t} myDepartment={myDepartment} supabase={supabase} onDone={load} />
-                <span className="min-w-0 flex-1 truncate">
-                  <span className={overdue ? "font-semibold text-red-600" : "text-brand-700"}>{t.title}</span>
-                  {t.due_date && <span className="ml-1 text-brand-300">~{t.due_date}</span>}
-                </span>
-              </div>
-            );
-          })
-        )}
-      </div>
+    <div className="grid grid-cols-5 gap-2 sm:gap-3">
+      {BOARD_DEPARTMENTS.map((dept) => {
+        const deptTasks = tasks.filter((t) => t.assignees.includes(dept.value) && t.status !== "done").sort(compareDue);
+        return (
+          <div key={dept.value} className="min-w-0 rounded-2xl border border-brand-100 bg-brand-50/50 p-2 sm:p-3">
+            <h2 className="truncate px-0.5 text-xs font-bold text-brand-700 sm:text-sm">
+              {dept.label} <span className="font-normal text-brand-300">({deptTasks.length})</span>
+            </h2>
+            <div className="mt-2 space-y-1.5">
+              {deptTasks.length === 0 ? (
+                <p className="px-0.5 text-[10px] text-brand-300 sm:text-xs">급한 업무가 없어요.</p>
+              ) : (
+                deptTasks.map((t) => {
+                  const overdue = !!t.due_date && t.due_date < todayKey;
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => onSelectTask(t.id, t.project_id)}
+                      className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-white px-1.5 py-1.5 text-[10px] hover:bg-brand-100 sm:text-xs"
+                    >
+                      <CompleteToggle task={t} myDepartment={myDepartment} supabase={supabase} onDone={load} />
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className={overdue ? "font-semibold text-red-600" : "text-brand-700"}>{t.title}</span>
+                        {t.due_date && <span className="ml-1 text-brand-300">~{t.due_date}</span>}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

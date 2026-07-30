@@ -3,15 +3,15 @@
 import { BAKING_PLACE } from "@/lib/bakingPlace";
 
 const ACTIVITIES = [
-  { emoji: "📅", title: "정기주최", desc: "매주 정해진 일정에 진행되는 정규 베이킹 활동" },
-  { emoji: "🎂", title: "자유주최", desc: "회원 누구나 원하는 날짜에 직접 여는 베이킹 모임" },
-  { emoji: "🍰", title: "월별 스페셜 베이킹", desc: "매달 특별한 주제로 진행되는 베이킹 이벤트" },
-  { emoji: "🎉", title: "신환회", desc: "신입 부원을 환영하는 행사" },
-  { emoji: "🚌", title: "엠티", desc: "학기마다 떠나는 동아리 엠티" },
-  { emoji: "🥐", title: "빵지순례", desc: "유명 빵집을 함께 탐방하는 활동" },
-  { emoji: "🧑‍🍳", title: "조별 베이킹", desc: "학기 중 조를 편성하여 주어진 베이킹 미션을 수행하는 활동" },
-  { emoji: "🍪", title: "간식행사", desc: "동아리 활동 중 간식을 나누는 소소한 행사" },
-  { emoji: "🍻", title: "주점", desc: "축제 기간 디저트를 판매하는 주점을 기획·운영하는 활동" },
+  { emoji: "📅", title: "정기주최" },
+  { emoji: "🎂", title: "자유주최" },
+  { emoji: "🍰", title: "월별 스페셜 베이킹" },
+  { emoji: "🎉", title: "신환회" },
+  { emoji: "🚌", title: "엠티" },
+  { emoji: "🥐", title: "빵지순례" },
+  { emoji: "🧑‍🍳", title: "조별 베이킹" },
+  { emoji: "🍪", title: "간식행사" },
+  { emoji: "🍻", title: "주점" },
 ];
 
 // TODO: 담당자 확정되면 이름/연락처 채우기
@@ -58,7 +58,6 @@ export default function Home() {
             >
               <div className="text-3xl">{a.emoji}</div>
               <div className="mt-2 font-bold text-brand-700">{a.title}</div>
-              <p className="mt-1 text-xs text-brand-500">{a.desc}</p>
             </div>
           ))}
         </div>

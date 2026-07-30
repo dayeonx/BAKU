@@ -163,7 +163,7 @@ export default function AdminMembersPage() {
   if (!isPresident) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-16 text-center text-brand-500">
-        회장단만 접근할 수 있는 페이지입니다.
+        접근 권한이 없습니다.
       </div>
     );
   }

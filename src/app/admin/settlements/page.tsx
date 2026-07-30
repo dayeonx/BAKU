@@ -66,24 +66,14 @@ export default function AdminSettlementsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold text-brand-700">정산 관리</h1>
-      <p className="mt-2 text-sm text-brand-500">
-        주최자가 접수한 정산 건에 참여자별 금액을 배정하고, 입금 확인 후 완료 처리해요.
-      </p>
 
       <section className="mt-6">
-        <h2 className="mb-3 text-lg font-bold text-brand-700">베이킹 활동 정산 처리</h2>
-        <p className="mb-3 text-xs text-brand-500">
-          정기주최·자유주최·월별 스페셜 베이킹의 주최자 등록 정산을 확인하고 배정해요.
-        </p>
+        <h2 className="mb-3 text-lg font-bold text-brand-700">베이킹 활동 정산 등록</h2>
         <OfficerSettlementSection supabase={supabase} baking={true} />
       </section>
 
       <section className="mt-10">
-        <h2 className="mb-3 text-lg font-bold text-brand-700">기타 활동 정산 등록</h2>
-        <p className="mb-3 text-xs text-brand-500">
-          신환회·엠티·빵지순례 등 주최자가 없는 활동은 물론, 그 밖의 어떤 활동이든 임원진이 직접 참여자를 지정해
-          정산을 등록할 수 있어요.
-        </p>
+        <h2 className="mb-3 text-lg font-bold text-brand-700">기타 활동 직접 정산 등록</h2>
         <ManualSettlementSection supabase={supabase} />
         <div className="mt-6">
           <OfficerSettlementSection supabase={supabase} baking={false} />

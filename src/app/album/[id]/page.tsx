@@ -446,7 +446,7 @@ function PhotoSection({
       {photos.length === 0 ? (
         <p className="mt-2 text-sm text-brand-300">등록된 사진이 없어요.</p>
       ) : (
-        <div className="mt-3 columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-6">
+        <div className="mt-3 columns-2 gap-3 sm:columns-3 md:columns-4">
           {photos.map((p) => (
             <div key={p.id} className="group relative mb-3 break-inside-avoid">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -515,62 +515,91 @@ function CoverPositionModal({
   onCancel: () => void;
   onSave: (position: string) => void;
 }) {
-  const [xInit, yInit] = initialPosition.split(" ").map((v) => parseInt(v, 10));
-  const [x, setX] = useState(Number.isFinite(xInit) ? xInit : 50);
-  const [y, setY] = useState(Number.isFinite(yInit) ? yInit : 50);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [imgSize, setImgSize] = useState<{ w: number; h: number } | null>(null);
+  const [square, setSquare] = useState<{ x: number; y: number } | null>(null);
+  const dragState = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const squareSize = imgSize ? Math.min(imgSize.w, imgSize.h) : 0;
+  const maxX = imgSize ? imgSize.w - squareSize : 0;
+  const maxY = imgSize ? imgSize.h - squareSize : 0;
+
+  function handleImgLoad() {
+    const img = imgRef.current;
+    if (!img) return;
+    const w = img.clientWidth;
+    const h = img.clientHeight;
+    const s = Math.min(w, h);
+    const mx = w - s;
+    const my = h - s;
+    const [xPct, yPct] = initialPosition.split(" ").map((v) => parseFloat(v));
+    const x = mx > 0 ? (Number.isFinite(xPct) ? (xPct / 100) * mx : mx / 2) : 0;
+    const y = my > 0 ? (Number.isFinite(yPct) ? (yPct / 100) * my : my / 2) : 0;
+    setImgSize({ w, h });
+    setSquare({ x, y });
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!square) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragState.current = { startX: e.clientX, startY: e.clientY, origX: square.x, origY: square.y };
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragState.current) return;
+    const dx = e.clientX - dragState.current.startX;
+    const dy = e.clientY - dragState.current.startY;
+    const nx = Math.min(Math.max(dragState.current.origX + dx, 0), maxX);
+    const ny = Math.min(Math.max(dragState.current.origY + dy, 0), maxY);
+    setSquare({ x: nx, y: ny });
+  }
+
+  function handlePointerUp() {
+    dragState.current = null;
+  }
+
   async function handleSave() {
+    if (!square) return;
+    const xPct = maxX > 0 ? Math.round((square.x / maxX) * 100) : 50;
+    const yPct = maxY > 0 ? Math.round((square.y / maxY) * 100) : 50;
     setSaving(true);
-    await onSave(`${x}% ${y}%`);
+    await onSave(`${xPct}% ${yPct}%`);
     setSaving(false);
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onCancel}>
-      <div
-        className="w-full max-w-sm rounded-2xl bg-white p-4"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="w-full max-w-md rounded-2xl bg-white p-4" onClick={(e) => e.stopPropagation()}>
         <p className="text-sm font-bold text-brand-700">대표 사진 영역 조정</p>
-        <p className="mt-1 text-xs text-brand-300">앨범 목록에서 정사각형으로 보일 영역을 미리보고 조정하세요.</p>
-        <div className="mt-3 aspect-square w-full overflow-hidden rounded-xl bg-brand-50">
+        <p className="mt-1 text-xs text-brand-300">
+          네모 영역을 드래그해서 앨범에서 정사각형으로 보일 부분을 선택하세요.
+        </p>
+        <div className="relative mt-3 select-none" style={{ touchAction: "none" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
+            ref={imgRef}
             src={photoUrl}
             alt=""
-            style={{ objectPosition: `${x}% ${y}%` }}
-            className="h-full w-full object-cover"
+            onLoad={handleImgLoad}
+            draggable={false}
+            className="block max-h-[60vh] w-auto max-w-full rounded-xl"
           />
-        </div>
-        <div className="mt-3 space-y-2">
-          <label className="block text-xs text-brand-500">
-            가로 위치
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={x}
-              onChange={(e) => setX(Number(e.target.value))}
-              className="mt-1 w-full"
+          {imgSize && square && (
+            <div
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              className="absolute cursor-move touch-none border-2 border-accent-500 bg-accent-500/10"
+              style={{ left: square.x, top: square.y, width: squareSize, height: squareSize }}
             />
-          </label>
-          <label className="block text-xs text-brand-500">
-            세로 위치
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={y}
-              onChange={(e) => setY(Number(e.target.value))}
-              className="mt-1 w-full"
-            />
-          </label>
+          )}
         </div>
         <div className="mt-4 flex gap-2">
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !square}
             className="rounded-full bg-accent-500 px-4 py-2 text-xs font-semibold text-white hover:bg-accent-700 disabled:opacity-60"
           >
             {saving ? "저장 중..." : "대표 사진으로 저장"}

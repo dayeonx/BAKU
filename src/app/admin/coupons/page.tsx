@@ -119,7 +119,6 @@ export default function AdminCouponsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
       <h1 className="text-2xl font-extrabold text-brand-700">쿠폰 관리</h1>
-      <p className="mt-2 text-sm text-brand-500">회원에게 무료 베이킹 쿠폰을 등록하고, 발급된 쿠폰을 관리해요.</p>
 
       <div className="mt-6 rounded-2xl border border-brand-100 bg-white p-5">
         <p className="text-sm font-bold text-brand-700">쿠폰 등록</p>
