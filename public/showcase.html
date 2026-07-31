@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BAKU 소개 — 우리 동아리 활동관리 앱</title>
+<link rel="icon" href="icons/icon-192.png" />
+<style>
+  :root {
+    --brand-50: #fdf3ec;
+    --brand-100: #f7e1cd;
+    --brand-300: #d9a06a;
+    --brand-500: #a8632f;
+    --brand-700: #6b3f1d;
+    --brand-900: #3f2410;
+    --accent-100: #ffe4c4;
+    --accent-300: #f5a259;
+    --accent-500: #e0791f;
+    --accent-700: #b25c12;
+    --cream: #fff8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+    background: var(--cream);
+    color: var(--brand-900);
+    line-height: 1.6;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(255, 248, 240, 0.92);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--brand-100);
+  }
+  nav .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+  }
+  .nav-brand { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--brand-700); }
+  .nav-brand img { width: 26px; height: 26px; border-radius: 7px; }
+  .nav-links { display: flex; gap: 18px; font-size: 13px; font-weight: 600; color: var(--brand-500); }
+  .nav-links a { text-decoration: none; }
+  .nav-links a:hover { color: var(--accent-700); }
+  @media (max-width: 520px) { .nav-links { display: none; } }
+
+  header.hero {
+    text-align: center;
+    padding: 64px 20px 48px;
+    background: linear-gradient(180deg, var(--brand-50) 0%, var(--cream) 100%);
+  }
+  .hero img { width: 84px; height: 84px; border-radius: 22px; box-shadow: 0 8px 24px rgba(107,63,29,0.18); }
+  .hero h1 { font-size: 34px; font-weight: 900; color: var(--brand-700); margin: 18px 0 6px; }
+  .hero .tagline { font-size: 16px; color: var(--brand-500); font-weight: 600; margin-bottom: 6px; }
+  .hero p.sub { font-size: 14px; color: var(--brand-500); max-width: 480px; margin: 0 auto 26px; }
+  .cta {
+    display: inline-block;
+    background: var(--accent-500);
+    color: #fff !important;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 13px 28px;
+    border-radius: 999px;
+    text-decoration: none;
+    box-shadow: 0 6px 18px rgba(224,121,31,0.35);
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .cta:hover { background: var(--accent-700); transform: translateY(-1px); }
+  .cta.secondary {
+    background: #fff;
+    color: var(--brand-700) !important;
+    border: 1.5px solid var(--brand-100);
+    box-shadow: none;
+    margin-left: 10px;
+  }
+  .cta.secondary:hover { background: var(--brand-50); }
+
+  section { padding: 56px 20px; }
+  section.alt { background: #fff; }
+  h2.section-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--brand-700);
+    margin: 0 0 8px;
+  }
+  p.section-desc { font-size: 14px; color: var(--brand-500); margin: 0 0 32px; }
+
+  .intro-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 700px) { .intro-grid { grid-template-columns: 1fr; } }
+  .intro-card {
+    background: var(--brand-50);
+    border-radius: 18px;
+    padding: 22px 20px;
+  }
+  .intro-card .emoji { font-size: 26px; }
+  .intro-card h3 { font-size: 15px; color: var(--brand-700); margin: 10px 0 6px; }
+  .intro-card p { font-size: 13.5px; color: var(--brand-500); margin: 0; }
+
+  /* flow */
+  .flow { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
+  .flow-step {
+    display: flex;
+    gap: 18px;
+    padding: 22px 0;
+    border-bottom: 1px dashed var(--brand-100);
+  }
+  .flow-step:last-of-type { border-bottom: none; }
+  .flow-num {
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: var(--accent-100);
+    color: var(--accent-700);
+    font-weight: 900;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .flow-body h3 { margin: 0 0 4px; font-size: 16px; color: var(--brand-700); display: flex; align-items: center; gap: 8px; }
+  .flow-body .tag {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-700);
+    background: var(--accent-100);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .flow-body p { margin: 0; font-size: 13.5px; color: var(--brand-500); }
+  .flow-arrow { text-align: center; color: var(--brand-300); font-size: 18px; margin: -6px 0; }
+
+  .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+  .chip {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--brand-700);
+    background: var(--brand-100);
+    padding: 6px 13px;
+    border-radius: 999px;
+  }
+
+  .try-box {
+    text-align: center;
+    background: var(--brand-700);
+    color: #fff;
+    border-radius: 24px;
+    padding: 40px 24px;
+  }
+  .try-box h3 { font-size: 20px; margin: 0 0 6px; }
+  .try-box p { font-size: 13.5px; color: var(--brand-100); margin: 0 0 20px; }
+  .try-box .cta { background: #fff; color: var(--brand-700) !important; }
+  .try-box .cta:hover { background: var(--accent-100); }
+  .try-box .url { font-size: 12px; color: var(--brand-100); margin-top: 14px; word-break: break-all; }
+
+  .install-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 28px; }
+  @media (max-width: 640px) { .install-grid { grid-template-columns: 1fr; } }
+  .install-card {
+    background: var(--brand-50);
+    border-radius: 18px;
+    padding: 22px 22px 20px;
+  }
+  .install-card h4 { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--brand-700); margin: 0 0 14px; }
+  .install-card ol { margin: 0; padding-left: 20px; }
+  .install-card li { font-size: 13.5px; color: var(--brand-500); margin-bottom: 8px; }
+  .install-card li b { color: var(--brand-700); }
+  .install-note { font-size: 12px; color: var(--brand-300); margin-top: 12px; }
+
+  .timeline { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 8px; }
+  @media (max-width: 640px) { .timeline { grid-template-columns: 1fr; } }
+  .week-card { border-radius: 18px; padding: 22px; }
+  .week-card.w1 { background: var(--brand-50); }
+  .week-card.w2 { background: var(--accent-100); }
+  .week-card .week-label { font-size: 11px; font-weight: 800; letter-spacing: 0.03em; color: var(--brand-500); }
+  .week-card.w2 .week-label { color: var(--accent-700); }
+  .week-card h3 { margin: 6px 0 12px; font-size: 16px; color: var(--brand-700); }
+  .week-card ul { margin: 0; padding-left: 18px; }
+  .week-card li { font-size: 13px; color: var(--brand-700); margin-bottom: 7px; }
+
+  .lesson-list { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
+  .lesson {
+    display: flex;
+    gap: 14px;
+    background: #fff;
+    border: 1px solid var(--brand-100);
+    border-radius: 16px;
+    padding: 18px 20px;
+  }
+  .lesson .icon { font-size: 20px; flex: none; }
+  .lesson h4 { margin: 0 0 4px; font-size: 14px; color: var(--brand-700); }
+  .lesson p { margin: 0; font-size: 13px; color: var(--brand-500); }
+  .lesson p.arrow { margin-top: 4px; color: var(--accent-700); font-weight: 600; }
+
+  footer {
+    text-align: center;
+    padding: 40px 20px 56px;
+    font-size: 12.5px;
+    color: var(--brand-300);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #241a12; color: #f7e9dc; }
+    nav { background: rgba(36,26,18,0.9); border-bottom-color: #4a3320; }
+    section.alt { background: #2c2016; }
+    header.hero { background: linear-gradient(180deg, #2c2016 0%, #241a12 100%); }
+    .intro-card, .install-card, .flow-num, .chip { background: #3a2a1b; color: #f2ddc8; }
+    .intro-card p, .install-card li, .flow-body p, p.section-desc, .try-box p { color: #d8b998; }
+    .week-card.w1 { background: #3a2a1b; }
+    .lesson { background: #2c2016; border-color: #4a3320; }
+    .lesson p { color: #d8b998; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="nav-brand"><img src="icons/icon-192.png" alt="BAKU" />BAKU 소개</div>
+    <div class="nav-links">
+      <a href="#intro">소개</a>
+      <a href="#flow">기능</a>
+      <a href="#try">체험하기</a>
+      <a href="#notes">개발 노트</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <img src="icons/icon-192.png" alt="BAKU 로고" />
+  <h1>BAKU</h1>
+  <p class="tagline">고려대학교 제과제빵동아리 활동관리 앱</p>
+  <p class="sub">행사 등록부터 참여 신청, 정산, 후기, 앨범까지 — 우리 동아리 활동의 모든 흐름을 하나의 앱에서.</p>
+  <a class="cta" href="https://baku-mu.vercel.app" target="_blank" rel="noopener">지금 체험하기 →</a>
+  <a class="cta secondary" href="#try">앱으로 설치하는 법</a>
+</header>
+
+<section id="intro">
+  <div class="wrap">
+    <h2 class="section-title">왜 BAKU를 만들었나요?</h2>
+    <p class="section-desc">엑셀 시트와 단톡방에 흩어져 있던 동아리 운영 업무를 한곳에 모으고 싶어서 직접 기획하고 만들었어요.</p>
+    <div class="intro-grid">
+      <div class="intro-card">
+        <div class="emoji">🎯</div>
+        <h3>왜 만들었나</h3>
+        <p>행사 등록, 참여자 파악, 정산 확인이 매번 엑셀·카톡으로 흩어져서 헷갈렸던 문제를 해결하려고 만들었어요.</p>
+      </div>
+      <div class="intro-card">
+        <div class="emoji">🧑‍🤝‍🧑</div>
+        <h3>누구에게 필요한가</h3>
+        <p>회장단은 행사 승인·정산·회원 관리를, 일반 부원은 신청·정산 확인·후기 작성을 이 앱 하나로 처리해요.</p>
+      </div>
+      <div class="intro-card">
+        <div class="emoji">🕐</div>
+        <h3>언제 사용하나</h3>
+        <p>새 활동을 기획할 때부터 활동이 끝나고 앨범에 추억이 쌓이는 순간까지, 전 과정에서 사용해요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="flow">
+  <div class="wrap">
+    <h2 class="section-title">핵심 기능 흐름</h2>
+    <p class="section-desc">하나의 활동이 만들어지고 기록으로 남기까지, BAKU 안에서 이렇게 이어져요.</p>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-body">
+          <h3>📅 주최 등록 <span class="tag">캘린더</span></h3>
+          <p>정기주최부터 자유주최, 신환회·엠티·빵지순례 같은 특별 활동까지, 카테고리에 맞는 정보를 입력해 캘린더에 일정을 등록해요. 임원진 승인을 거쳐 확정돼요.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-body">
+          <h3>✋ 참여 신청 <span class="tag">선착순</span></h3>
+          <p>등록된 활동에 부원들이 신청해요. 정원이 차면 마감되는 선착순 방식이라 신청 현황을 실시간으로 확인할 수 있어요.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-body">
+          <h3>💰 정산 <span class="tag">2단계 확인</span></h3>
+          <p>참여자가 입금 사실을 자가 신고하면 임원진이 확인 처리하는 2단계 구조예요. 쿠폰이 있다면 정산에 바로 적용할 수 있고, 마이페이지에서 대기·완료 상태를 바로 볼 수 있어요.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-body">
+          <h3>✍️ 후기 등록 <span class="tag">활동 종료 후</span></h3>
+          <p>활동이 끝나면(정확한 종료 시각 기준) 참여자가 후기를 남길 수 있어요. 짧은 소감이 아니라 100자 이상의 진짜 후기를 쓰도록 했고, 사진은 앨범에 따로 올려요.</p>
+        </div>
+      </div>
+      <div class="flow-arrow">↓</div>
+      <div class="flow-step">
+        <div class="flow-num">5</div>
+        <div class="flow-body">
+          <h3>📷 앨범 <span class="tag">학기별 아카이브</span></h3>
+          <p>활동 사진을 인스타그램 피드처럼 모아 보고, 대표 사진은 원하는 위치로 크롭할 수 있어요. 레시피와 참고 링크도 함께 남겨서 학기별로 우리 동아리 활동이 예쁘게 쌓여요.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="chip-row">
+      <span class="chip">🔔 알림벨</span>
+      <span class="chip">🎟️ 쿠폰 관리</span>
+      <span class="chip">📋 부서별 업무 보드</span>
+      <span class="chip">👥 회원 관리</span>
+      <span class="chip">📁 구글 드라이브 연동</span>
+      <span class="chip">📱 홈 화면 앱 설치(PWA)</span>
+    </div>
+  </div>
+</section>
+
+<section id="try">
+  <div class="wrap">
+    <h2 class="section-title">체험하기</h2>
+    <p class="section-desc">아래 링크로 바로 접속해 보세요. 스마트폰 홈 화면에 추가하면 진짜 앱처럼 아이콘을 눌러 바로 실행할 수 있어요.</p>
+
+    <div class="try-box">
+      <h3>지금 바로 BAKU를 만나보세요</h3>
+      <p>회원가입 후 로그인하면 모든 기능을 사용할 수 있어요.</p>
+      <a class="cta" href="https://baku-mu.vercel.app" target="_blank" rel="noopener">baku-mu.vercel.app 접속하기</a>
+      <p class="url">https://baku-mu.vercel.app</p>
+    </div>
+
+    <div class="install-grid">
+      <div class="install-card">
+        <h4>🍎 아이폰(Safari)에서 앱으로 추가하기</h4>
+        <ol>
+          <li><b>Safari</b>로 baku-mu.vercel.app에 접속해요.</li>
+          <li>화면 하단의 <b>공유 버튼</b>(사각형 위에 위쪽 화살표 아이콘)을 눌러요.</li>
+          <li>메뉴를 아래로 내려서 <b>&quot;홈 화면에 추가&quot;</b>를 선택해요.</li>
+          <li>이름을 확인하고 오른쪽 위 <b>&quot;추가&quot;</b>를 눌러요.</li>
+          <li>홈 화면에 생긴 BAKU 아이콘을 누르면 앱처럼 전체 화면으로 실행돼요.</li>
+        </ol>
+        <p class="install-note">※ 반드시 Safari로 접속해야 &quot;홈 화면에 추가&quot; 메뉴가 보여요. (크롬 등 다른 브라우저에는 없을 수 있어요)</p>
+      </div>
+      <div class="install-card">
+        <h4>🤖 안드로이드(Chrome)에서 앱으로 추가하기</h4>
+        <ol>
+          <li><b>Chrome</b>으로 baku-mu.vercel.app에 접속해요.</li>
+          <li>오른쪽 위 <b>점 세 개(⋮) 메뉴</b>를 눌러요.</li>
+          <li><b>&quot;앱 설치&quot;</b> 또는 <b>&quot;홈 화면에 추가&quot;</b>를 선택해요. (기기마다 문구가 조금 달라요)</li>
+          <li>안내창에서 <b>&quot;설치&quot;</b>를 눌러요.</li>
+          <li>홈 화면 또는 앱 서랍에 생긴 BAKU 아이콘으로 바로 실행해요.</li>
+        </ol>
+        <p class="install-note">※ 접속 중 하단에 &quot;앱 설치&quot; 배너가 자동으로 뜨기도 해요. 그럴 땐 배너를 눌러도 돼요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="notes">
+  <div class="wrap">
+    <h2 class="section-title">1주차 → 2주차, 달라진 점</h2>
+    <p class="section-desc">기본 골격을 만든 1주차와, 실제로 쓸 수 있도록 다듬은 2주차의 차이예요.</p>
+
+    <div class="timeline">
+      <div class="week-card w1">
+        <div class="week-label">WEEK 1 · 골격 만들기</div>
+        <h3>로그인부터 기본 페이지까지</h3>
+        <ul>
+          <li>Supabase 인증 기반 로그인·회원가입</li>
+          <li>메인 홈, 캘린더, 앨범 기본 구조</li>
+          <li>행사 등록·승인, 참여 신청 흐름 1차 구현</li>
+          <li>임원진 전용 관리자 메뉴, 마이페이지 기본</li>
+        </ul>
+      </div>
+      <div class="week-card w2">
+        <div class="week-label">WEEK 2 · 실사용 다듬기</div>
+        <h3>진짜 쓸 수 있는 앱으로</h3>
+        <ul>
+          <li>정산을 &quot;자가 신고 + 임원 확인&quot; 2단계로 고도화</li>
+          <li>업무 관리를 프로젝트/단계 구조로 재설계</li>
+          <li>쿠폰·구글드라이브 연동, 알림벨 추가</li>
+          <li>PWA 지원 + 모바일 헤더 메뉴 신규 추가</li>
+          <li>한글/공백 파일명 업로드 오류 등 버그 수정</li>
+          <li>실제 사용 피드백을 반영한 문구·UX 반복 정리</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2 class="section-title">개발 과정의 시행착오와 배운 점</h2>
+    <p class="section-desc">만들면서 실제로 부딪히고 고친 문제들이에요.</p>
+
+    <div class="lesson-list">
+      <div class="lesson">
+        <div class="icon">🗂️</div>
+        <div>
+          <h4>한글·공백이 든 파일명 업로드 실패</h4>
+          <p>영수증 사진, 참여자 명단 엑셀 파일명에 한글이나 공백이 들어가면 Supabase Storage가 업로드를 거부했어요.</p>
+          <p class="arrow">→ 업로드 전 파일명을 영문·숫자로 안전하게 바꿔주는 함수를 만들어 모든 업로드 지점에 적용했어요.</p>
+        </div>
+      </div>
+      <div class="lesson">
+        <div class="icon">⏱️</div>
+        <div>
+          <h4>&quot;활동 종료&quot;를 날짜로만 판단했던 문제</h4>
+          <p>날짜만 기준으로 삼으니 활동이 오후 늦게 끝나도 자정이 지나야 정산·앨범이 열려서 실제 흐름과 어긋났어요.</p>
+          <p class="arrow">→ 종료 날짜와 시각을 함께 비교하는 로직으로 통일해서, 활동이 끝나는 정확한 순간에 맞춰 열리도록 고쳤어요.</p>
+        </div>
+      </div>
+      <div class="lesson">
+        <div class="icon">👥</div>
+        <div>
+          <h4>업무 담당자를 부서 하나로만 설계했던 문제</h4>
+          <p>처음엔 업무마다 담당 부서를 하나만 고를 수 있었는데, 실제로는 여러 부서가 함께 협업하는 업무가 많았어요.</p>
+          <p class="arrow">→ 담당자를 여러 부서·이름을 자유롭게 조합할 수 있는 구조로 리팩터링했어요.</p>
+        </div>
+      </div>
+      <div class="lesson">
+        <div class="icon">🔐</div>
+        <div>
+          <h4>권한 관리는 결국 데이터베이스 레벨에서</h4>
+          <p>화면에서만 버튼을 숨기는 방식으로는 진짜 보안이 되지 않는다는 걸 깨달았어요.</p>
+          <p class="arrow">→ Supabase RLS(행 단위 보안 정책)로 임원진·주최자·참여자 권한을 데이터베이스에서 직접 검증하도록 만들고, 기능이 추가될 때마다 SQL 마이그레이션을 작성해 반영했어요.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  BAKU · 고려대학교 제과제빵동아리 &nbsp;·&nbsp; 만든이: 박다연 (회장)
+</footer>
+
+</body>
+</html>
